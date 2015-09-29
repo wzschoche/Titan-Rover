@@ -8,6 +8,11 @@
 #define CAL_SIGNAL 1500
 #define TEST_SIGNAL 1650
 
+Servo motor1;
+Servo motor2;
+Servo motor3;
+Servo motor4;
+
 uint32_t ulTimeStart;
 
 void setup() {
