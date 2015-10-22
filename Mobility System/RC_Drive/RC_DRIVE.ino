@@ -1,8 +1,16 @@
+/*
+ * 
+ */
+
+
 #include <Servo.h>
 #include <PinChangeInt.h>
 #include <Math.h>
 
+//channel two
 #define JLY_IN_PIN 10
+
+//channel one
 #define JLX_IN_PIN 11
 
 #define ESCFL_OUT_PIN 7
@@ -14,6 +22,9 @@
 #define JLX_FLAG 1
 
 #define CAL_SIGNAL 1500
+
+#define MAX_FWD 1750
+#define MAX_REV 1250
 
 volatile uint8_t bUpdateFlagsShared;
 
@@ -29,8 +40,6 @@ uint32_t cycles;
 
 float x_coord;
 float y_coord;
-float angleR;
-float angleL;
 
 Servo motorFL;
 Servo motorFR;
@@ -77,10 +86,11 @@ void loop() {
   
   static uint8_t bUpdateFlags;
 
-  static uint8_t mag_vec;
-
   float propL;
   float propR;
+
+  float v;
+  float w;
   
   //Ensure ESCs are calibrated by sending idles signal for a
   //minimum of 4 seconds.
@@ -104,58 +114,8 @@ void loop() {
     interrupts();
   }
   
-  if(bUpdateFlags & JLY_FLAG) {
-    //if(motorFL.readMicroseconds() != usJLYIn) {
-      if(usJLYIn < 1000) {
-        usJLYIn = 1000;
-      }
-      else if(usJLYIn > 2000) {
-        usJLYIn = 2000;
-      }
-      //usJLYIn = map(usJLYIn, 1000, 2000, 1150, 1850);
-
-      y_coord = map(usJLYIn, 1000, 2000, -100, 100);
-      if(!(bUpdateFlags & JLY_FLAG)) {
-        if(x_coord <= 0) {
-          angleL = atan2(fabs(y_coord), fabs(x_coord));
-          angleR = 180 - angleL;
-
-          mag_vec = sqrt((pow(x_coord,2)+pow(y_coord,2)));
-          propL = (angleL/180)*mag_vec;
-          propR = (angleR/180)*mag_vec;
-
-          if(y_coord <= 0) {
-            usPowR = map(propR, 0, 45, 1500, 1350);
-            usPowL = map(propL, 0, 45, 1500, 1350);
-          }
-          else {
-            usPowR = map(propR, 0, 45, 1500, 1750);
-            usPowL = map(propL, 0, 45, 1500, 1750);
-          }
-        }
-        else {
-          angleR = atan2(fabs(y_coord), fabs(x_coord));
-          angleL = 180 - angleR;
-
-          mag_vec = sqrt((pow(x_coord,2)+pow(y_coord,2)));
-          propL = (angleL/180)*mag_vec;
-          propR = (angleR/180)*mag_vec;
-
-          if(y_coord <= 0) {
-            usPowR = map(propR, 0, 45, 1500, 1350);
-            usPowL = map(propL, 0, 45, 1500, 1350);
-          }
-          else {
-            usPowR = map(propR, 0, 45, 1500, 1750);
-            usPowL = map(propL, 0, 45, 1500, 1750);
-          }
-        }
-      }
-        
-      Serial.println(usJLYIn);
-    }
-  
-  if(bUpdateFlags & JLX_FLAG) {
+  if(bUpdateFlags & (JLX_FLAG || JLY_FLAG)) {
+    Serial.println("x-flag and y-flag");
 
     if(usJLXIn < 1000) {
         usJLXIn = 1000;
@@ -163,48 +123,56 @@ void loop() {
     else if(usJLXIn > 2000) {
       usJLXIn = 2000;
     }
+    if(usJLYIn < 1000) {
+        usJLYIn = 1000;
+    }
+    else if(usJLYIn > 2000) {
+        usJLYIn = 2000;
+    }
     //usJLYIn = map(usJLXIn, 1000, 2000, 1150, 1850);
     x_coord = map(usJLXIn, 1000, 2000, -100, 100);
+    y_coord = map(usJLYIn, 1000, 2000, -100, 100);
 
-    if(x_coord <= 0) {
-      angleL = atan2(fabs(y_coord), fabs(x_coord));
-      angleR = 180 - angleL;
+//    Serial.print("x-coord: ");
+//    Serial.println(x_coord);
+    if (fabs(x_coord) < 10)
+      x_coord = 0;
+    if (fabs(y_coord) < 10)
+        y_coord = 0;
 
-      mag_vec = sqrt((pow(x_coord,2)+pow(y_coord,2)));
-      propL = (angleL/180)*mag_vec;
-      propR = (angleR/180)*mag_vec;
+    //invert x_coord here?
+    x_coord *= -1;
+    
+    v = calcPosVar(x_coord, y_coord);
 
-      if(y_coord <= 0) {
-        usPowR = map(propR, 0, 45, 1500, 1350);
-        usPowL = map(propL, 0, 45, 1500, 1350);
-      }
-      else {
-        usPowR = map(propR, 0, 45, 1500, 1750);
-        usPowL = map(propL, 0, 45, 1500, 1750);
-      }
+    w = calcNegVar(x_coord, y_coord);
+
+    propR = calcRightPower(v, w);
+
+    propL = calcLeftPower(v, w);
+
+    if(propR < 0) {
+      usPowR = 1500 - ((1500 - MAX_REV)*(fabs(propR)/100));      
     }
     else {
-      angleR = atan2(fabs(y_coord), fabs(x_coord));
-      angleL = 180 - angleR;
+      usPowR = 1500 + ((MAX_FWD - 1500)*(propR/100));
+    }
 
-      mag_vec = sqrt((pow(x_coord,2)+pow(y_coord,2)));
-      propL = (angleL/180)*mag_vec;
-      propR = (angleR/180)*mag_vec;
-
-      if(y_coord <= 0) {
-        usPowR = map(propR, 0, 45, 1500, 1350);
-        usPowL = map(propL, 0, 45, 1500, 1350);
-      }
-      else {
-        usPowR = map(propR, 0, 45, 1500, 1750);
-        usPowL = map(propL, 0, 45, 1500, 1750);
-      }
+    if(propL < 0) {
+      usPowL = 1500 - ((1500 - MAX_REV)*(fabs(propL)/100));      
+    }
+    else {
+      usPowL = 1500 + ((MAX_FWD - 1500)*(propL/100));
     }
   }
 
+  Serial.print("wheels right: ");
+  Serial.println(usPowR);
   setSpeedRight(usPowR);
+  Serial.print("wheels left: ");
+  Serial.println(usPowL);
   setSpeedLeft(usPowL);
-  Serial.println(usJLXIn);
+  //Serial.println(usJLXIn);
     
   bUpdateFlags = 0;
   
@@ -215,6 +183,28 @@ void loop() {
   //Serial.print("Loops: ");
   //Serial.println(cycles);
   }
+  Serial.print("y-coord: ");
+  Serial.println(y_coord);
+  Serial.print("x-coord: ");
+  Serial.println(x_coord);
+  Serial.println("\n");
+  //delay(1000);
+}
+
+float calcPosVar(float x, float y) {
+  return (100-fabs(x))*(y/100)+y;
+}
+
+float calcNegVar(float x, float y) {
+  return (100-fabs(y))*(x/100)+x;
+}
+
+float calcRightPower(float v, float w) {
+  return (v+w)/2;
+}
+
+float calcLeftPower(float v, float w) {
+  return (v-w)/2;
 }
 
 void setSpeedAll(uint16_t val) {
@@ -225,13 +215,13 @@ void setSpeedAll(uint16_t val) {
 }
 
 void setSpeedLeft(uint16_t val) {
-  motorFL.writeMicroseconds(val);
-  motorBL.writeMicroseconds(val);
+  //motorFL.writeMicroseconds(val);
+  //motorBL.writeMicroseconds(val);
 }
 
 void setSpeedRight(uint16_t val) {
   motorFR.writeMicroseconds(val);
-  motorBR.writeMicroseconds(val);
+  //motorBR.writeMicroseconds(val);
 }
 
 void calcJLY() {
@@ -258,4 +248,3 @@ void calcJLX()
     bUpdateFlagsShared |= JLX_FLAG;
   }
 }
-
