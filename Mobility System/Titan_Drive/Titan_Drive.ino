@@ -1,5 +1,20 @@
 /*
- * 
+ *  Project:        Titan Rover 2016
+ *  Program:        Drive Program
+ *  Date Created:   10/21/2015
+ *  
+ *  Mobility Team:  William Zschoche
+ *                  Paul Ishizaki
+ *                  Justin Stewart
+ *                  Bastian Awischus
+ *                  
+ *  Description:    Preliminary drive sketch directing Rover Mobility sub-system.
+ *                  Single joystick control over of rover in differential steering
+ *                  configuration.
+ *                  
+ *                  Two PWM signal inputs are into -100, 100 cartesian coordinate
+ *                  format. Calculations result in proportional power signals to
+ *                  drive 4 to 6 electronic speed controller (ESCs).
  */
 
 
@@ -7,25 +22,44 @@
 #include <PinChangeInt.h>
 #include <Math.h>
 
-//channel two
-#define JLY_IN_PIN 10
+/*  
+ *   Input pins from X8R radio receiver.
+ */
+#define JLX_IN_PIN 10     //ch. 1
+#define JLY_IN_PIN 11     //ch. 2
 
-//channel one
-#define JLX_IN_PIN 11
+/*
+ *  Output pins to ESCs.
+ */
+#define ESCFL_OUT_PIN 7   //Front Left ESC
+#define ESCFR_OUT_PIN 8   //Front Right ESC
+#define ESCBL_OUT_PIN 2   //Back Left ESC
+#define ESCBR_OUT_PIN 3   //Back Right ESC
 
-#define ESCFL_OUT_PIN 7
-#define ESCFR_OUT_PIN 8
-#define ESCBL_OUT_PIN 2
-#define ESCBR_OUT_PIN 3
-
+/*
+ *  Binary "flag" values for interrupts.
+ */
 #define JLY_FLAG 2
 #define JLX_FLAG 1
 
+/*
+ *  Calibration signal for ESCs; 1500 = 0 throttle.
+ */
 #define CAL_SIGNAL 1500
 
-#define MAX_FWD 1750
-#define MAX_REV 1250
+/*
+ *  Signal limiting constants. Maximum allowable signals for forward and
+ *  reverse throttle.
+ *  
+ *  Note: Throttle is further limited in ESC firmware profile TITAN_ROVER. to a maximum of 25%.
+ *        
+ */
+#define MAX_FWD 1750      //Max forward throttle
+#define MAX_REV 1250      //Max reverse throttle
 
+/*
+ *  
+ */
 volatile uint8_t bUpdateFlagsShared;
 
 volatile uint16_t usJLYInShared;
@@ -224,6 +258,7 @@ void setSpeedRight(uint16_t val) {
   //motorBR.writeMicroseconds(val);
 }
 
+// Calculate 
 void calcJLY() {
   if(digitalRead(JLY_IN_PIN) == HIGH)
   { 
