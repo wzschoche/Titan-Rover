@@ -249,13 +249,13 @@ void setSpeedAll(uint16_t val) {
 }
 
 void setSpeedLeft(uint16_t val) {
-  //motorFL.writeMicroseconds(val);
-  //motorBL.writeMicroseconds(val);
+  motorFL.writeMicroseconds(val);
+  motorBL.writeMicroseconds(val);
 }
 
 void setSpeedRight(uint16_t val) {
   motorFR.writeMicroseconds(val);
-  //motorBR.writeMicroseconds(val);
+  motorBR.writeMicroseconds(val);
 }
 
 // Calculate 
