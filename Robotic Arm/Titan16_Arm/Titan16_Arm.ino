@@ -19,9 +19,9 @@
 volatile uint8_t bUpdateFlagsShared;
 
 volatile uint16_t usJ1InShared;
-volatile uint16_t usJ2lInShared;
+volatile uint16_t usJ2InShared;
 volatile uint16_t usWRInShared;
-volatile uint16_t usEDlInShared;
+volatile uint16_t usEDInShared;
 
 uint32_t ulJ1Start;
 uint32_t ulJ2Start;
@@ -128,4 +128,56 @@ void loop() {
   }
   
   bUpdateFlags = 0;
+}
+
+void calcJ1()
+{
+  if(digitalRead(J1_IN_PIN) == HIGH)
+  { 
+    ulJ1Start = micros();
+  }
+  else
+  {
+    usJ1InShared = (uint16_t)(micros() - ulJ1Start);
+    bUpdateFlagsShared |= J1_FLAG;
+  }
+}
+
+void calcJ2()
+{
+  if(digitalRead(J2_IN_PIN) == HIGH)
+  { 
+    ulJ2Start = micros();
+  }
+  else
+  {
+    usJ2InShared = (uint16_t)(micros() - ulJ2Start);
+    bUpdateFlagsShared |= J2_FLAG;
+  }
+}
+
+void calcWR()
+{
+  if(digitalRead(WR_IN_PIN) == HIGH)
+  { 
+    ulWRStart = micros();
+  }
+  else
+  {
+    usWRInShared = (uint16_t)(micros() - ulWRStart);
+    bUpdateFlagsShared |= WR_FLAG;
+  }
+}
+
+void calcED()
+{
+  if(digitalRead(ED_IN_PIN) == HIGH)
+  { 
+    ulEDStart = micros();
+  }
+  else
+  {
+    usEDInShared = (uint16_t)(micros() - ulEDStart);
+    bUpdateFlagsShared |= ED_FLAG;
+  }
 }
