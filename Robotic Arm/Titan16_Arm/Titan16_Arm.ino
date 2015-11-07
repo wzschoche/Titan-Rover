@@ -5,18 +5,19 @@
 /*
  *  Input pins from X8R receiver
  */
-#define JOINT1_IN_PIN 10
-#define JOINT2_IN_PIN 11
-#define WRIST_IN_PIN  12
-#define ENDE_IN_PIN   13
+#define JOINT1_IN_PIN 10  //ch. 7
+#define JOINT2_IN_PIN 11  //ch. 6
+#define WRIST_IN_PIN  12  //ch. 4
+#define ENDE_IN_PIN   13  //ch. 3
 
 /*
  *  Output pins to arm joints (AJNT)
  */
-#define AJNT1_OUT_PIN 7
-#define AJNT2_OUT_PIN 8
-#define WRIST_OUT_PIN 9
-#define ENDE_OUT_PIN  6
+//valid PWM output pins: 3,5,6,9,10,11
+#define AJNT1_OUT_PIN 3   //flag 1
+#define AJNT2_OUT_PIN 5   //flag 2
+#define WRIST_OUT_PIN 6   //flag 3
+#define ENDE_OUT_PIN  9   //flag 4
 
 /*
  *  Binary "flag" values for interrupts
@@ -30,14 +31,14 @@
  /*
   *   Calibration signal for AJNT servo motors; 1500 = 0 output
   */
- #define CAL_SIGNAL 1500
+#define CENTER_SIGNAL 1500
 
  /*
   *   Signal limiting constant.  The servos will move at a constant
   *   speed; so they are either on or off
   */
 
-  #define MAX_ON 1750
+//#define MAX_ON 1750
 
   /*
    * 
@@ -78,10 +79,10 @@ void setup() {
   wristJoint.attach(WRIST_OUT_PIN);
   endeJoint.attach(ENDE_OUT_PIN);
 
-  armJoint1.writeMicroseconds(1500);
-  armJoint2.writeMicroseconds(1500);
-  wristJoint.writeMicroseconds(1500);
-  endeJoint.writeMicroseconds(1500);
+  armJoint1.writeMicroseconds(CENTER_SIGNAL);
+  armJoint2.writeMicroseconds(CENTER_SIGNAL);
+  wristJoint.writeMicroseconds(CENTER_SIGNAL);
+  endeJoint.writeMicroseconds(CENTER_SIGNAL);
 
   //attach interrupts
   Serial.println("attaching interrupts");
@@ -172,19 +173,24 @@ void loop() {
     else if (usENDEIn > 2000)
       usENDEIn = 2000;  
 
+    
     joint1 = map(usAJNT1In, 1000, 2000, 1350, 1650);
     joint2 = map(usAJNT2In, 1000, 2000, 1350, 1650);
     wrist = map(usWRISTIn, 1000, 2000, 1350, 1650);
-    ende = map(usENDEIn, 1000, 2000, 1350, 1650);
+    //wrist = 1500;
+    //Shovel End Effector: Collision imminent with j1 when j2 is at_____ and
+    //end effector is at 1820. Conditions should prefent this.
+    ende = map(usENDEIn, 1000, 2000, 1276, 1950);
+    //ende = usENDEIn;
 
-    Serial.print("joint1: ");
-    Serial.println(joint1);
-    Serial.print("joint2: ");
-    Serial.println(joint2);
-    Serial.print("wrist: ");
-    Serial.println(wrist);
-    Serial.print("ende: ");
-    Serial.println(ende);
+//    Serial.print("joint1: ");
+//    Serial.println(joint1);
+//    Serial.print("joint2: ");
+//    Serial.println(joint2);
+//    Serial.print("wrist: ");
+//    Serial.println(wrist);
+//    Serial.print("ende: ");
+//    Serial.println(ende);
 
 //    if (fabs(joint1) < )
 //      joint1 = 1500;
@@ -205,7 +211,7 @@ void loop() {
 //    Serial.println("");
 //    Serial.print("joint2: ");
 //    Serial.println(joint2);
-    Serial.println("");
+//    Serial.println("");
 
     setSpeedJoint1(joint1);
     setSpeedJoint2(joint2);
@@ -219,12 +225,6 @@ void loop() {
 
 }
 
-void setSpeedAll(uint16_t val)
-{
-  armJoint1.writeMicroseconds(val);
-  armJoint2.writeMicroseconds(val);
-}
-
 void setSpeedJoint1(uint16_t val)
 {
   armJoint1.writeMicroseconds(val);
@@ -232,6 +232,7 @@ void setSpeedJoint1(uint16_t val)
 
 void setSpeedJoint2(uint16_t val)
 {
+  Serial.println(val);
   armJoint2.writeMicroseconds(val);
 }
 
