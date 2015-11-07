@@ -1,183 +1,297 @@
 #include <Servo.h>
 #include <PinChangeInt.h>
+#include <Math.h>
 
-#define J1_IN_PIN   10
-#define J2_IN_PIN   11
-#define WR_IN_PIN   12
-#define ED_IN_PIN   13
+/*
+ *  Input pins from X8R receiver
+ */
+#define JOINT1_IN_PIN 10
+#define JOINT2_IN_PIN 11
+#define WRIST_IN_PIN  12
+#define ENDE_IN_PIN   13
 
-#define J1_OUT_PIN  6
-#define J2_OUT_PIN  7
-#define WR_OUT_PIN  8
-#define ED_OUT_PIN  9
+/*
+ *  Output pins to arm joints (AJNT)
+ */
+#define AJNT1_OUT_PIN 7
+#define AJNT2_OUT_PIN 8
+#define WRIST_OUT_PIN 9
+#define ENDE_OUT_PIN  6
 
-#define J1_FLAG     1
-#define J2_FLAG     2
-#define WR_FLAG     4
-#define ED_FLAG     8
+/*
+ *  Binary "flag" values for interrupts
+ */
 
+ #define JOINT1_FLAG 1
+ #define JOINT2_FLAG 2
+ #define WRIST_FLAG  4
+ #define ENDE_FLAG   8
+
+ /*
+  *   Calibration signal for AJNT servo motors; 1500 = 0 output
+  */
+ #define CAL_SIGNAL 1500
+
+ /*
+  *   Signal limiting constant.  The servos will move at a constant
+  *   speed; so they are either on or off
+  */
+
+  #define MAX_ON 1750
+
+  /*
+   * 
+   */
 volatile uint8_t bUpdateFlagsShared;
 
-volatile uint16_t usJ1InShared;
-volatile uint16_t usJ2InShared;
-volatile uint16_t usWRInShared;
-volatile uint16_t usEDInShared;
+volatile uint16_t usAJNT1InShared;
+volatile uint16_t usAJNT2InShared;
+volatile uint16_t usWRISTInShared;
+volatile uint16_t usENDEInShared;
 
-uint32_t ulJ1Start;
-uint32_t ulJ2Start;
-uint32_t ulWRStart;
-uint32_t ulEDStart;
+uint32_t ulAJNT1Start;
+uint32_t ulAJNT2Start;
+uint32_t ulWRISTStart;
+uint32_t ulENDEStart;
 
-Servo servoJ1;
-Servo servoJ2;
-Servo servoWR;
-Servo servoED;
+uint32_t ulTimeStart;
+
+uint32_t cycles;
+
+float joint1;
+float joint2;
+float wrist;
+float ende;
+
+Servo armJoint1;
+Servo armJoint2;
+Servo wristJoint;
+Servo endeJoint;
 
 void setup() {
   Serial.begin(9600);
-  
-  servoJ1.attach(J1_OUT_PIN);
-  servoJ2.attach(J2_OUT_PIN);
-  servoWR.attach(WR_OUT_PIN);
-  servoED.attach(ED_OUT_PIN);
 
-  PCintPort::attachInterrupt(J1_IN_PIN, calcJ1, CHANGE);
-  PCintPort::attachInterrupt(J2_IN_PIN, calcJ2, CHANGE);
-  PCintPort::attachInterrupt(WR_IN_PIN, calcWR, CHANGE);
-  PCintPort::attachInterrupt(ED_IN_PIN, calcED, CHANGE);
+  //attach output pins
+  Serial.println("attaching pins...");
+  armJoint1.attach(AJNT1_OUT_PIN);
+  armJoint2.attach(AJNT2_OUT_PIN);
+  wristJoint.attach(WRIST_OUT_PIN);
+  endeJoint.attach(ENDE_OUT_PIN);
+
+  armJoint1.writeMicroseconds(1500);
+  armJoint2.writeMicroseconds(1500);
+  wristJoint.writeMicroseconds(1500);
+  endeJoint.writeMicroseconds(1500);
+
+  //attach interrupts
+  Serial.println("attaching interrupts");
+  PCintPort::attachInterrupt(JOINT1_IN_PIN, calcAJNT1, CHANGE);
+  PCintPort::attachInterrupt(JOINT2_IN_PIN, calcAJNT2, CHANGE);
+  PCintPort::attachInterrupt(WRIST_IN_PIN, calcWRIST, CHANGE);
+  PCintPort::attachInterrupt(ENDE_IN_PIN, calcENDE, CHANGE);
+
+  ulTimeStart = micros();
+//  Serial.println("Calibrating...");
+//  do {
+//    setSpeedAll(CAL_SIGNAL);
+//  } while ((micros() - ulTimeStart) <= 4000000);
+//  Serial.println("Done Calibrating");
+
+  //initialize timer
+  ulTimeStart = micros();
+
+  //initialize  cycle counter
+  cycles = 0;
+
+  Serial.println("Done with Setup");
+
 }
 
+
 void loop() {
-  static uint16_t usJ1In;
-  static uint16_t usJ2In;
-  static uint16_t usWRIn;
-  static uint16_t usEDIn;
-  
+
+  static uint16_t usAJNT1In;
+  static uint16_t usAJNT2In;
+  static uint16_t usWRISTIn;
+  static uint16_t usENDEIn;
+
+  static uint16_t usAJNT1;
+  static uint16_t usAJNT2;
+  static uint16_t usWRIST;
+  static uint16_t usENDE;
+
   static uint8_t bUpdateFlags;
 
-  if(bUpdateFlagsShared) {
+  if (bUpdateFlagsShared)
+  {
     noInterrupts();
+
     bUpdateFlags = bUpdateFlagsShared;
 
-    if(bUpdateFlags & J1_FLAG) usJ1In = usJ1InShared;
-
-    if(bUpdateFlags & J2_FLAG) usJ2In = usJ2InShared;
-
-    if(bUpdateFlags & WR_FLAG) usWRIn = usWRInShared;
-    
-    if(bUpdateFlags & ED_FLAG) usEDIn = usEDInShared;
+    if (bUpdateFlags & JOINT1_FLAG)
+    {
+      usAJNT1In = usAJNT1InShared;
+    }
+    if (bUpdateFlags & JOINT2_FLAG)
+    {
+      usAJNT2In = usAJNT2InShared;
+    }
+    if (bUpdateFlags & WRIST_FLAG)
+    {
+      usWRISTIn = usWRISTInShared;
+    }
+    if (bUpdateFlags & ENDE_FLAG)
+    {
+      usENDEIn = usENDEInShared;
+    }
 
     bUpdateFlagsShared = 0;
+
     interrupts();
   }
 
-  if(bUpdateFlags & J1_FLAG) {
-    if(servoJ1.readMicroseconds() != usJ1In)
-    {
-      if(usJ1In < 1000)
-        usJ1In = 1000;
-      else if(usJ1In > 2000)
-        usJ1In = 2000;
+  if (bUpdateFlags & (JOINT1_FLAG || JOINT2_FLAG || WRIST_FLAG || ENDE_FLAG))
+  {
+    if (usAJNT1In < 1000)
+      usAJNT1In = 1000;
+    else if (usAJNT1In > 2000)
+      usAJNT1In = 2000;
       
-      usJ1In = map(usJ1In, 1000, 2000, 1220, 1480);
+    if (usAJNT2In < 1000)
+      usAJNT2In = 1000;
+    else if (usAJNT2In > 2000)
+      usAJNT2In = 2000;
       
-      servoJ1.writeMicroseconds(usJ1In);
-    }
-  }
+    if (usWRISTIn < 1000)
+      usWRISTIn = 1000;
+    else if (usWRISTIn > 2000)
+      usWRISTIn = 2000;
 
-  if(bUpdateFlags & J2_FLAG) {
-    if(servoJ2.readMicroseconds() != usJ2In)
-    {
-      if(usJ2In < 1000)
-        usJ2In = 1000;
-      else if(usJ2In > 2000)
-        usJ2In = 2000;
-      
-      usJ2In = map(usJ2In, 1000, 2000, 1220, 1480);
-      
-      servoJ2.writeMicroseconds(usJ2In);
-    }
-  }
+    if (usENDEIn < 1000)
+      usENDEIn = 1000;
+    else if (usENDEIn > 2000)
+      usENDEIn = 2000;  
 
-  if(bUpdateFlags & WR_FLAG) {
-    if(servoWR.readMicroseconds() != usWRIn)
-    {
-      if(usWRIn < 1000)
-        usWRIn = 1000;
-      else if(usWRIn > 2000)
-        usWRIn = 2000;
-      
-      usWRIn = map(usWRIn, 1000, 2000, 1220, 1480);
-      
-      servoWR.writeMicroseconds(usWRIn);
-    }
-  }
+    joint1 = map(usAJNT1In, 1000, 2000, 1350, 1650);
+    joint2 = map(usAJNT2In, 1000, 2000, 1350, 1650);
+    wrist = map(usWRISTIn, 1000, 2000, 1350, 1650);
+    ende = map(usENDEIn, 1000, 2000, 1350, 1650);
 
-  if(bUpdateFlags & ED_FLAG) {
-    if(servoED.readMicroseconds() != usEDIn)
-    {
-      if(usEDIn < 1000)
-        usEDIn = 1000;
-      else if(usEDIn > 2000)
-        usEDIn = 2000;
-      
-      usEDIn = map(usEDIn, 1000, 2000, 1220, 1480);
-      
-      servoED.writeMicroseconds(usEDIn);
-    }
+    Serial.print("joint1: ");
+    Serial.println(joint1);
+    Serial.print("joint2: ");
+    Serial.println(joint2);
+    Serial.print("wrist: ");
+    Serial.println(wrist);
+    Serial.print("ende: ");
+    Serial.println(ende);
+
+//    if (fabs(joint1) < )
+//      joint1 = 1500;
+//    else if (joint1 >= 20)
+//      joint1 = 1650;
+//    else if (joint1 <= -20)
+//      joint1 = 1350;
+          
+//    if (fabs(joint2) < 20)
+//      joint2 = 1500;
+//    else if (joint2 >= 20)
+//      joint2 = 1650;
+//    else if (joint2 <= -20)
+//      joint2 = 1400;  
+    
+//    Serial.print("joint1: ");
+//    Serial.println(joint1);
+//    Serial.println("");
+//    Serial.print("joint2: ");
+//    Serial.println(joint2);
+    Serial.println("");
+
+    setSpeedJoint1(joint1);
+    setSpeedJoint2(joint2);
+    setSpeedWrist(wrist);
+    setSpeedEnde(ende);
+
+    bUpdateFlags = 0;
+                
   }
-  
-  bUpdateFlags = 0;
+  //delay(1000);
+
 }
 
-void calcJ1()
+void setSpeedAll(uint16_t val)
 {
-  if(digitalRead(J1_IN_PIN) == HIGH)
-  { 
-    ulJ1Start = micros();
+  armJoint1.writeMicroseconds(val);
+  armJoint2.writeMicroseconds(val);
+}
+
+void setSpeedJoint1(uint16_t val)
+{
+  armJoint1.writeMicroseconds(val);
+}
+
+void setSpeedJoint2(uint16_t val)
+{
+  armJoint2.writeMicroseconds(val);
+}
+
+void setSpeedWrist(uint16_t val)
+{
+  wristJoint.writeMicroseconds(val);
+}
+
+void setSpeedEnde(uint16_t val)
+{
+  endeJoint.writeMicroseconds(val);
+}
+
+void calcAJNT1()
+{
+  if (digitalRead(JOINT1_IN_PIN) == HIGH)
+  {
+    ulAJNT1Start = micros();  
   }
   else
   {
-    usJ1InShared = (uint16_t)(micros() - ulJ1Start);
-    bUpdateFlagsShared |= J1_FLAG;
+    usAJNT1InShared = (uint16_t)(micros() - ulAJNT1Start);
+    bUpdateFlagsShared |= JOINT1_FLAG;
   }
 }
-
-void calcJ2()
+void calcAJNT2()
 {
-  if(digitalRead(J2_IN_PIN) == HIGH)
-  { 
-    ulJ2Start = micros();
+  if (digitalRead(JOINT2_IN_PIN) == HIGH)
+  {
+    ulAJNT2Start = micros();
   }
   else
   {
-    usJ2InShared = (uint16_t)(micros() - ulJ2Start);
-    bUpdateFlagsShared |= J2_FLAG;
+    usAJNT2InShared = (uint16_t)(micros() - ulAJNT2Start);
+    bUpdateFlagsShared |= JOINT2_FLAG;
   }
 }
-
-void calcWR()
+void calcWRIST()
 {
-  if(digitalRead(WR_IN_PIN) == HIGH)
-  { 
-    ulWRStart = micros();
+  //Serial.println("WRIST IS READ");
+  if (digitalRead(WRIST_IN_PIN) == HIGH)
+  {
+    ulWRISTStart = micros();  
   }
   else
   {
-    usWRInShared = (uint16_t)(micros() - ulWRStart);
-    bUpdateFlagsShared |= WR_FLAG;
+    usWRISTInShared = (uint16_t)(micros() - ulWRISTStart);
+    bUpdateFlagsShared |= WRIST_FLAG;
   }
 }
-
-void calcED()
+void calcENDE()
 {
-  if(digitalRead(ED_IN_PIN) == HIGH)
-  { 
-    ulEDStart = micros();
+  //Serial.println("ENDE IS READ");
+  if (digitalRead(ENDE_IN_PIN) == HIGH)
+  {
+    ulENDEStart = micros();  
   }
   else
   {
-    usEDInShared = (uint16_t)(micros() - ulEDStart);
-    bUpdateFlagsShared |= ED_FLAG;
+    usENDEInShared = (uint16_t)(micros() - ulENDEStart);
+    bUpdateFlagsShared |= ENDE_FLAG;
   }
 }
