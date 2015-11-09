@@ -30,11 +30,14 @@
 
 /*
  *  Output pins to ESCs.
- */
-#define ESCFL_OUT_PIN 7   //Front Left ESC
-#define ESCFR_OUT_PIN 8   //Front Right ESC
-#define ESCBL_OUT_PIN 2   //Back Left ESC
-#define ESCBR_OUT_PIN 3   //Back Right ESC
+
+    valid PWM output pins(MEGA 2560): 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
+                                      44, 45, 46
+*/
+#define ESCFL_OUT_PIN 2   //Front Left ESC
+#define ESCFR_OUT_PIN 3   //Front Right ESC
+#define ESCBL_OUT_PIN 4   //Back Left ESC
+#define ESCBR_OUT_PIN 5   //Back Right ESC
 
 /*
  *  Binary "flag" values for interrupts.
@@ -256,6 +259,7 @@ void setSpeedLeft(uint16_t val) {
 void setSpeedRight(uint16_t val) {
   motorFR.writeMicroseconds(val);
   motorBR.writeMicroseconds(val);
+  Serial.println(motorBR.readMicroseconds());
 }
 
 // Calculate 

@@ -13,7 +13,7 @@
 /*
  *  Output pins to arm joints (AJNT)
  */
-//valid PWM output pins: 3,5,6,9,10,11
+//valid PWM output pins(UNO): 3,5,6,9,10,11
 #define AJNT1_OUT_PIN 3   //flag 1
 #define AJNT2_OUT_PIN 5   //flag 2
 #define WRIST_OUT_PIN 6   //flag 3
@@ -174,7 +174,7 @@ void loop() {
       usENDEIn = 2000;  
 
     
-    joint1 = map(usAJNT1In, 1000, 2000, 1350, 1650);
+    joint1 = map(usAJNT1In, 1000, 2000, 1472, 1864);
     joint2 = map(usAJNT2In, 1000, 2000, 1350, 1650);
     wrist = map(usWRISTIn, 1000, 2000, 1350, 1650);
     //wrist = 1500;
@@ -183,8 +183,8 @@ void loop() {
     ende = map(usENDEIn, 1000, 2000, 1276, 1950);
     //ende = usENDEIn;
 
-//    Serial.print("joint1: ");
-//    Serial.println(joint1);
+    Serial.print("joint1: ");
+    Serial.println(joint1);
 //    Serial.print("joint2: ");
 //    Serial.println(joint2);
 //    Serial.print("wrist: ");
@@ -232,7 +232,7 @@ void setSpeedJoint1(uint16_t val)
 
 void setSpeedJoint2(uint16_t val)
 {
-  Serial.println(val);
+  //Serial.println(val);
   armJoint2.writeMicroseconds(val);
 }
 
