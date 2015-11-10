@@ -114,14 +114,13 @@ void setup() {
 }
 
 void loop() {
+  static uint8_t bUpdateFlags;
   
   static uint16_t usJLYIn;
   static uint16_t usJLXIn;
 
   static uint16_t usPowL;
   static uint16_t usPowR;
-  
-  static uint8_t bUpdateFlags;
 
   float propL;
   float propR;
@@ -205,9 +204,10 @@ void loop() {
 
   Serial.print("wheels right: ");
   Serial.println(usPowR);
-  setSpeedRight(usPowR);
   Serial.print("wheels left: ");
   Serial.println(usPowL);
+
+  setSpeedRight(usPowR);
   setSpeedLeft(usPowL);
   //Serial.println(usJLXIn);
     

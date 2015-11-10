@@ -1,6 +1,5 @@
 #include <Servo.h>
 #include <PinChangeInt.h>
-#include <Math.h>
 
 /*
  *  Input pins from X8R receiver
@@ -11,13 +10,13 @@
 #define ENDE_IN_PIN   13  //ch. 3
 
 /*
- *  Output pins to arm joints (AJNT)
+ *  Output pins to arm joints
  */
 //valid PWM output pins(UNO): 3,5,6,9,10,11
-#define AJNT1_OUT_PIN 3   //flag 1
-#define AJNT2_OUT_PIN 5   //flag 2
-#define WRIST_OUT_PIN 6   //flag 3
-#define ENDE_OUT_PIN  9   //flag 4
+#define AJNT1_OUT_PIN 3   //tape 1
+#define AJNT2_OUT_PIN 5   //tape 2
+#define WRIST_OUT_PIN 6   //tape 3
+#define ENDE_OUT_PIN  9   //tape 4
 
 /*
  *  Binary "flag" values for interrupts
@@ -33,36 +32,26 @@
   */
 #define CENTER_SIGNAL 1500
 
- /*
-  *   Signal limiting constant.  The servos will move at a constant
-  *   speed; so they are either on or off
-  */
-
-//#define MAX_ON 1750
-
-  /*
-   * 
-   */
+//bit flag to indicate new sensor data has been written
 volatile uint8_t bUpdateFlagsShared;
 
+//raw sensor data
 volatile uint16_t usAJNT1InShared;
 volatile uint16_t usAJNT2InShared;
 volatile uint16_t usWRISTInShared;
 volatile uint16_t usENDEInShared;
 
+//timestamp placeholder to for signal time length calcs
 uint32_t ulAJNT1Start;
 uint32_t ulAJNT2Start;
 uint32_t ulWRISTStart;
 uint32_t ulENDEStart;
 
-uint32_t ulTimeStart;
-
-uint32_t cycles;
-
-float joint1;
-float joint2;
-float wrist;
-float ende;
+////timer for cycle calculations
+//uint32_t ulTimeStart;
+//
+////cycle counter
+//uint32_t cycles;
 
 Servo armJoint1;
 Servo armJoint2;
@@ -79,6 +68,8 @@ void setup() {
   wristJoint.attach(WRIST_OUT_PIN);
   endeJoint.attach(ENDE_OUT_PIN);
 
+  //safety signal in case receiver does not receive data
+  //extend arm straight out
   armJoint1.writeMicroseconds(CENTER_SIGNAL);
   armJoint2.writeMicroseconds(CENTER_SIGNAL);
   wristJoint.writeMicroseconds(CENTER_SIGNAL);
@@ -91,26 +82,21 @@ void setup() {
   PCintPort::attachInterrupt(WRIST_IN_PIN, calcWRIST, CHANGE);
   PCintPort::attachInterrupt(ENDE_IN_PIN, calcENDE, CHANGE);
 
-  ulTimeStart = micros();
-//  Serial.println("Calibrating...");
-//  do {
-//    setSpeedAll(CAL_SIGNAL);
-//  } while ((micros() - ulTimeStart) <= 4000000);
-//  Serial.println("Done Calibrating");
-
-  //initialize timer
-  ulTimeStart = micros();
-
-  //initialize  cycle counter
-  cycles = 0;
-
+//  //initialize timer
+//  ulTimeStart = micros();
+//
+//  //initialize  cycle counter
+//  cycles = 0;
+  
+  //sanity checker
   Serial.println("Done with Setup");
-
 }
 
 
 void loop() {
-
+  
+  static uint8_t bUpdateFlags;
+  
   static uint16_t usAJNT1In;
   static uint16_t usAJNT2In;
   static uint16_t usWRISTIn;
@@ -121,16 +107,17 @@ void loop() {
   static uint16_t usWRIST;
   static uint16_t usENDE;
 
-  static uint8_t bUpdateFlags;
-
   if (bUpdateFlagsShared)
   {
+    //prevent writing from sensors to volatile vars
     noInterrupts();
 
+    //grab values from volatile vars
     bUpdateFlags = bUpdateFlagsShared;
 
     if (bUpdateFlags & JOINT1_FLAG)
     {
+      if(fabs(usAJNT1InShared - usAJNT1In) > 4)
       usAJNT1In = usAJNT1InShared;
     }
     if (bUpdateFlags & JOINT2_FLAG)
@@ -146,13 +133,17 @@ void loop() {
       usENDEIn = usENDEInShared;
     }
 
+    //reset flag
     bUpdateFlagsShared = 0;
 
+    //resume sensor writing
     interrupts();
   }
 
+  //if flag values present (redundancy), scurb the new values for valid servo inputs
   if (bUpdateFlags & (JOINT1_FLAG || JOINT2_FLAG || WRIST_FLAG || ENDE_FLAG))
   {
+    
     if (usAJNT1In < 1000)
       usAJNT1In = 1000;
     else if (usAJNT1In > 2000)
@@ -171,52 +162,36 @@ void loop() {
     if (usENDEIn < 1000)
       usENDEIn = 1000;
     else if (usENDEIn > 2000)
-      usENDEIn = 2000;  
+      usENDEIn = 2000;
 
+    //map incoming values to allowable bounds
+    //usAJNT1 = map(usAJNT1In, 1000, 2000, 1000, 2000);
+    if(usAJNT1 != usAJNT1In)
+      usAJNT1 = usAJNT1In;
+      
+    usAJNT2 = map(usAJNT2In, 1000, 2000, 1000, 2000);
     
-    joint1 = map(usAJNT1In, 1000, 2000, 1472, 1864);
-    joint2 = map(usAJNT2In, 1000, 2000, 1350, 1650);
-    wrist = map(usWRISTIn, 1000, 2000, 1350, 1650);
-    //wrist = 1500;
-    //Shovel End Effector: Collision imminent with j1 when j2 is at_____ and
-    //end effector is at 1820. Conditions should prefent this.
-    ende = map(usENDEIn, 1000, 2000, 1276, 1950);
-    //ende = usENDEIn;
+    //NOTE:wrist locked to position for testing with shovel
+    usWRIST = 1725;
+    
+    //NOTE:Shovel End Effector: Collision imminent with j1 when j2 is at_____ and
+    //end effector is at 1820. Condition statements should prevent this.
+    usENDE = map(usENDEIn, 1000, 2000, 1276, 1950);
 
+    //Bound testing: print to console
     Serial.print("joint1: ");
-    Serial.println(joint1);
+    Serial.println(usAJNT1);
 //    Serial.print("joint2: ");
-//    Serial.println(joint2);
+//    Serial.println(usAJNT2);
 //    Serial.print("wrist: ");
-//    Serial.println(wrist);
+//    Serial.println(usWRIST);
 //    Serial.print("ende: ");
-//    Serial.println(ende);
+//    Serial.println(usENDE);
 
-//    if (fabs(joint1) < )
-//      joint1 = 1500;
-//    else if (joint1 >= 20)
-//      joint1 = 1650;
-//    else if (joint1 <= -20)
-//      joint1 = 1350;
-          
-//    if (fabs(joint2) < 20)
-//      joint2 = 1500;
-//    else if (joint2 >= 20)
-//      joint2 = 1650;
-//    else if (joint2 <= -20)
-//      joint2 = 1400;  
-    
-//    Serial.print("joint1: ");
-//    Serial.println(joint1);
-//    Serial.println("");
-//    Serial.print("joint2: ");
-//    Serial.println(joint2);
-//    Serial.println("");
-
-    setSpeedJoint1(joint1);
-    setSpeedJoint2(joint2);
-    setSpeedWrist(wrist);
-    setSpeedEnde(ende);
+    setSpeedJoint1(usAJNT1);
+    setSpeedJoint2(usAJNT2);
+    setSpeedWrist(usWRIST);
+    setSpeedEnde(usENDE);
 
     bUpdateFlags = 0;
                 
