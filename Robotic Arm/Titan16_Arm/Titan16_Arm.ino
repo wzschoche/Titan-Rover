@@ -1,3 +1,7 @@
+/*
+ * authors: William Zschoche and Paul Ishizaki
+ */
+
 #include <Servo.h>
 #include <PinChangeInt.h>
 
