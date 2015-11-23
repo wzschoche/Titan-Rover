@@ -198,6 +198,7 @@ void loop() {
     */
     bUpdateFlags = 0;
   }
+  
   delay(100);
 }
 
@@ -294,3 +295,4 @@ void calcYLocation()
     bUpdateFlagsShared |= YCOORDFLAG;
   }
 }
+//paul made a change
