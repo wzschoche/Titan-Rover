@@ -1,4 +1,6 @@
 /*
+ * author: William Zschoche
+ * 
  * Include libraries at the top of the source document. These signal the compiler
  * to look in the the specified libraries for keywords and function calls that we
  * will be using.
