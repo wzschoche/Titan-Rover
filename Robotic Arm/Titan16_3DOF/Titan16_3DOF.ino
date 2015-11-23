@@ -78,9 +78,6 @@ void setup() {
   delay(10000);
 }
 
-void loop() {
-  /*put your main code here, to run repeatedly:
-  */
   static uint16_t XCOORDIN;
   static uint16_t YCOORDIN;
   
@@ -95,6 +92,13 @@ void loop() {
   static int usAJNT2In;
   static int usAJNT1;
   static int usAJNT2;
+  
+  bool initialized = false;
+
+void loop() {
+  /*put your main code here, to run repeatedly:
+  */
+
   
   if (bUpdateFlagsShared)
   {
@@ -197,9 +201,10 @@ void loop() {
     setSpeedJoint2(usAJNT2);
     */
     bUpdateFlags = 0;
+    initialized = true;
   }
   //else state exclusively for debugging
-  else
+  else if(initialized)
   {
     Serial.println("******************************");
     Serial.println("DEBUG");
