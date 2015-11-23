@@ -198,6 +198,44 @@ void loop() {
     */
     bUpdateFlags = 0;
   }
+  //else state exclusively for debugging
+  else
+  {
+    Serial.println("******************************");
+    Serial.println("DEBUG");
+    //output Xcoordinate
+    Serial.print(XPOS);
+    Serial.print("\t");
+    
+    //output Ycoordinate
+    Serial.print(YPOS);
+    Serial.print("\t");
+  
+    //output theta1 in radian
+    Serial.print(theta1);
+    Serial.print("\t");
+    //output theta2 in radian
+    Serial.print(theta2);
+    Serial.print("\t");
+    
+    Serial.print(theta1Deg);
+    Serial.print("\t");
+    Serial.print(theta2Deg);
+    Serial.print("\t");
+    
+    if(theta1Deg >= -90 && theta1Deg <= 90 && theta2Deg >= -90 && theta2Deg <= 90)
+    {
+      //Converted Values that are inputs
+      Serial.print(usAJNT1);
+      Serial.print("\t");
+      Serial.print(usAJNT2);
+      setSpeedJoint1(usAJNT1);
+      setSpeedJoint2(usAJNT2);
+    }
+    Serial.println("\t");
+    Serial.println("******************************");
+    
+  }
   
   delay(100);
 }
@@ -295,4 +333,4 @@ void calcYLocation()
     bUpdateFlagsShared |= YCOORDFLAG;
   }
 }
-//paul made a change
+
