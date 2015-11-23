@@ -147,8 +147,11 @@ void loop() {
   // Math Stuff
   theta1 = solveTheta1(XPOS, YPOS, length1, length2);
   theta2 = solveTheta2(XPOS, YPOS, length1, length2);
-
-   if(!isnan(theta1) || !isnan(theta2))
+  if(isnan(theta1) || isnan(theta2))
+  {
+    delay(15000);
+  }
+  if(!isnan(theta1) || !isnan(theta2))
    {
     //output Xcoordinate
     Serial.print(XPOS);
