@@ -1,319 +1,204 @@
 
-import com.leapmotion.leap.*;
-import processing.net.*;
-import hypermedia.net.*;
+#include <SPI.h>
+#include <WiFi101.h> 
+#include <WiFiUdp.h>
+#include <math.h>
+#include <Servo.h>
+//#include "PinChangeInt.h"
 
-final float LENGTH1 = 900.0;
-final float LENGTH2 = 1050.0;
 
-final String IP = "192.168.1.105";
-final int PORT = 8888;
+//wifi initialize
+//IPAddress ip(192, 168, 1, 102);
+int status = WL_IDLE_STATUS;
+char ssid[] = "CSUF_TR";
+char pass[] = "titanrover";
+int keyIndex = 0;
 
-float xArm;
-float yArm;
-float wrist;
+unsigned int localPort = 8888;
 
-static float pastX;
-static float pastY;
-static float pastWrist;
+char packetBuffer[255];
 
-float theta1;
-float theta2;
-float theta1Deg;
-float theta2Deg;
+WiFiUDP Udp;
 
-static float pastTheta1;
-static float pastTheta2;
+//arm initialize
+#define CENTER_SIGNAL 1500
+#define ENDE_SIGNAL 1615
 
-static float joint1PWM;
-static float joint2PWM;
+#define AJNT1_OUT_PIN 3
+#define AJNT2_OUT_PIN 6
+#define ENDE_OUT_PIN 9
+#define WRIST_OUT_PIN 11
 
-boolean firstLoopCycle = true;
-boolean oneToOne = false;
+Servo armJoint1;
+Servo armJoint2;
+Servo endeJoint;
+Servo wristJoint;
 
-UDP udp;
-
-Client arm;
-Controller leap;
-boolean work = false;
 
 void setup()
 {
-  udp = new UDP(this, 6000);
-  udp.listen(true);
+  Serial.begin(9600);
+
+//  Udp.write("attaching pins\n");
+//  Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+//  Udp.write("attaching pins");
+//  Udp.endPacket();
+  Serial.println("attaching pins");
+  armJoint1.attach(AJNT1_OUT_PIN);
+  armJoint2.attach(AJNT2_OUT_PIN);
+  endeJoint.attach(ENDE_OUT_PIN);
+  wristJoint.attach(WRIST_OUT_PIN);
+//
+  armJoint1.writeMicroseconds(CENTER_SIGNAL);
+  armJoint2.writeMicroseconds(CENTER_SIGNAL);
+  endeJoint.writeMicroseconds(ENDE_SIGNAL);
+  wristJoint.writeMicroseconds(CENTER_SIGNAL);
+
+  while (!Serial){;}
   
-  size(500,500);
-  leap = new Controller();
+  Serial.println("checking shield");
+  if (WiFi.status() == WL_NO_SHIELD)
+  {
+    Serial.println("Wifi shield not present");
+    while(true);
+  }
+
+  //WiFi.config(ip);
+
+  while (status != WL_CONNECTED)
+  {
+    Serial.print("Attempting to connect to SSID: ");
+    Serial.println(ssid);
+    status = WiFi.begin(ssid, pass);
+    delay(10000);
+  }
+
+  Serial.println("Connected to wifi");
+
+  Serial.println("Starting connection to server . . .");
+
+  printWifiStatus();
+  
+  Udp.begin(localPort);
+
+  Serial.println("Done with Setup");
 }
 
-double cba(double a)
+
+void loop()
 {
-  float n = 100 * 3;
-  a = 1.5 + 2 * a / n;
-  double angle = 90 + Math.cos(a) * 90;
-  return angle;
+
+  int usAJNT1 = 0;
+  int usAJNT2 = 0;
+  int usWRIST = 0;
+
+  
+  
+  int packetSize = Udp.parsePacket();
+  if (packetSize)
+  {
+    //Serial.println("packet received");
+    int len = Udp.read(packetBuffer, 255);
+    if(len > 0) packetBuffer[len] = 0;
+
+    char temp[20];
+    int loopCount = 0;
+
+    //Serial.println(packetBuffer);
+
+    for (int i = 0; i < 255; ++i)
+    {
+      temp[i-loopCount] = packetBuffer[i];
+      if(packetBuffer[i] == '/')
+      {
+        if (usAJNT1 == 0)
+        {
+          usAJNT1 = atoi(temp);
+          strcpy(temp,"");
+        }
+        else if (usAJNT2 == 0)
+        {
+          usAJNT2 = atoi(temp);
+          strcpy(temp,"");
+        }
+        else
+        {
+          usWRIST = atoi(temp);
+          break;
+        }
+        loopCount = i + 1;
+      }
+    }
+    
+    Serial.print(usAJNT1);
+    Serial.print(" joint1\t");
+    Serial.print(usAJNT2);
+    Serial.print(" joint2\t");
+    Serial.print(usWRIST);
+    Serial.print(" wrist\t");
+    Serial.println(packetBuffer);
+
+
+
+
+      setSpeedJoint1(usAJNT1);
+      setSpeedJoint2(usAJNT2);
+      setSpeedEndE(1500);
+      setSpeedWrist(usWRIST);
+    
+
+    String message = String(usAJNT1) + " PWM\t" + String(usAJNT2) + " PWM\t" + String(usWRIST) + " PWM";
+    
+    char charBuffer[message.length()];
+
+    //Serial.println(message);
+    
+    message.toCharArray(charBuffer,message.length());
+//    Serial.println(charBuffer);
+    
+    Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+    Udp.write(charBuffer);
+    Udp.endPacket();
+//    delay(1000);
+
+  }
 }
 
-void draw()
+
+void setSpeedJoint1(uint16_t val)
 {
-  /***********************************************
-  
-      Leap Motion Calculations
-      
-  ************************************************/
-  
-  HandList hands = leap.frame().hands();
-  Hand hand = hands.get(0);
-  FingerList fingers = hand.fingers();
-  Vector hp = hand.palmPosition();
-  
-  Pointable f1 = fingers.get(0);
-  Pointable f2 = fingers.get(1);
-  
-  float ff1 = f1.tipPosition().getX();
-  float ff2 = f2.tipPosition().getX();
-  float sub = ff1 - ff2;
-  
-  float pitch = hand.direction().pitch() * 100;
-  
-  if(hp.getY() < 150)  hp.setY(150);
-  if(hp.getY() > 445)  hp.setY(445);
-  if(hp.getZ() < -180) hp.setZ(-180);
-  if(hp.getZ() > 180)  hp.setZ(180);
-  
-  float zv = map(hp.getZ(), -180, 180, 101, 1);
-  float yv = map(hp.getY(), 150, 445, 1, 101);
-  
-  double xv = 180 - cba(-hand.palmPosition().getX() / 1.5);
-  
-  float pv = map(pitch, -90, 100, 160, 6);
-  float gv = map(sub, 20, 90, 145, 73);
-  
-  if (fingers.count() >= 2) work = true;
-  else work = false;
-  
-  //if (work && zv <= 180 && zv >= 0 && yv <= 150 && yv >= 0 && xv <= 180 && xv >= 0 && pv >= 6 && gv <= 145 && gv >= 73)
-  //{
-  //  String v1 = (int)xv + "P";
-  //  String v2 = (int)zv + "Q";
-  //  String v3 = (int)yv + "F";
-  //  String v4 = (int)pv + "K";
-  //  String v5 = (int)gv + "L";
-  //}
-  
-  /***********************************************
-  
-      Inverse Kinematic Calculations
-      
-  ************************************************/ 
-if (oneToOne)
+  armJoint1.writeMicroseconds(val);
+}
+
+void setSpeedJoint2(uint16_t val)
 {
-  yArm = map(int(yv), 1, 101, -1950, 1950);
-  xArm = map((int)zv, 1, 101, -1950, 1950);
-  wrist = map((int)pv, -30, 200, 1000, 2000);
-  
-  wrist = checkPWMBounds(wrist);
-  
-  if (firstLoopCycle)
-  {
-    pastY = yArm;
-    pastX = xArm;
-    pastWrist = wrist;
-  }
-  
-  if ((int)yv == 1 && (int)zv == 51 && (int)pv == -167)
-  {
-    yArm = pastY;
-    xArm = pastX;
-    wrist = pastWrist;
-  }
-  
-  theta1 = solveTheta1(xArm, yArm, LENGTH1, LENGTH2);
-  theta2 = solveTheta2(xArm, yArm, LENGTH1, LENGTH2);
-  
-  if (firstLoopCycle)
-  {
-    pastTheta1 = theta1;
-    pastTheta2 = theta2;
-    firstLoopCycle = false;
-  }
-  
-  if (Float.isNaN(theta1))
-  {
-    theta1 = pastTheta1;
-  }
-  if (Float.isNaN(theta2))
-  {
-    theta2 = pastTheta2;
-  }
-  
-  theta1Deg = theta1 * (180/PI);
-  theta2Deg = theta2 * (180/PI);
-  
-  joint1PWM = map(theta1Deg, -180, 180, 1000, 2000);
-  joint2PWM = map(theta2Deg, -180, 180, 1000, 2000);
-  
-  joint1PWM = checkPWMBounds(joint1PWM);
-  joint2PWM = checkPWMBounds(joint2PWM);
-  
-  pastY = yArm;
-  pastX = xArm;
-  pastWrist = wrist;
-  pastTheta1 = theta1;
-  pastTheta2 = theta2;
+  armJoint2.writeMicroseconds(val);
 }
 
-else
+void setSpeedEndE(uint16_t val)
 {
-  if (firstLoopCycle)
-  {
-    joint1PWM = 1500;
-    joint2PWM = 1500;
-    wrist = 1500;
-    firstLoopCycle = false;
-  }
-  
-  if ((int)yv == 1 && (int)zv == 51 && (int)pv == -167)
-  {
-    yv = 50;
-    zv = 50;
-    pv = 50;
-  }
-  
-  if ((int)yv > 81)
-  {
-    joint1PWM += 20;
-  }
-  else if ((int)yv < 21)
-  {
-    joint1PWM -= 20;
-  }
-  
-  if ((int)zv > 81)
-  {
-    joint2PWM += 20;
-  }
-  else if ((int)zv < 21)
-  {
-    joint2PWM -= 20;
-  }
-  
-  if ((int)pv > 140)
-  {
-    wrist += 20;
-  }
-  else if ((int)pv < 10)
-  {
-    wrist -= 20;
-  }
-  
-  joint1PWM = checkPWMBounds(joint1PWM);
-  joint2PWM = checkPWMBounds(joint2PWM);
-  wrist = checkPWMBounds(wrist);
-  
-}
-  
-  /***********************************************
-  
-      Output and Final Results
-      
-  ************************************************/  
-  
-  background(100);
-  fill(255);
-  textSize(height / 8);
-  text(pv, 90, 100);
-  text(yv, 90, 180);
-  text(zv, 90, 260);
-  text((float)xv, 90, 340);
-  text(gv, 90, 420);
-  
-  String message = str(int(joint1PWM)) + "/" + str(int(joint2PWM)) + "/" + str(int(wrist)) + "/";
-  //println(message);
-  //String ip = "192.168.1.105";
-  //int port = 8888;
-  
-  udp.send(message, IP, PORT);
-  //println(message);
-  //print(int(zv));
-  //print(" x\t");
-  //print(int(yv));
-  //print(" y\t");
-  //print(int(pv));
-  //print(" wrist\t");
-  //print(theta1);
-  //print(" th1R\t");
-  //print(theta2);
-  //print(" th2R\t");
-  //print(theta1Deg);
-  //print(" th1D\t");
-  //print(theta2Deg);
-  //print(" th2D\t");
-  print(joint1PWM);
-  print(" j1PWM\t");
-  print(joint2PWM);
-  print(" j2PWM\t");
-  print(wrist);
-  println(" wrPWM");
-  delay(100);
+  endeJoint.writeMicroseconds(val);
 }
 
-  /***********************************************
-  
-      Receive Info from Arduino
-      
-  ************************************************/ 
-
-void receive(byte[] data, String ip, int port)
+void setSpeedWrist(uint16_t val)
 {
-  //println(data);
-  data = subset(data, 0, data.length);
-  String message = new String(data);
-  
-  //println("receive: \""+message+"\" from "+ip+" on port "+port);
-  //println(message);
+  wristJoint.writeMicroseconds(val);
 }
 
-  /***********************************************
-  
-      Math Functions
-      
-  ************************************************/ 
 
-float solveTheta1(float x, float y, float l1, float l2)
-{
-  float c2 = (x*x + y*y - l1*l1 - l2*l2) / (2*l1*l2*1.0f);
-  float s2 = sqrt(1 - c2*c2);
-  
-  float k1 = l1 + (l2*c2);
-  float k2 = l2*s2;
-  
-  float t1 = atan2(y,x) - atan2(k2,k1);
-  
-  return t1;
-}
+void printWifiStatus() {
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
 
-float solveTheta2(float x, float y, float l1, float l2)
-{
-  float c2 = (x*x + y*y - l1*l1 - l2*l2) / (2*l1*l2*1.0f);
-  float s2 = sqrt(1 - c2*c2);
-  
-  float t2 = atan2(s2,c2);
-  
-  return t2;
-}
+  // print your WiFi shield's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
 
-float checkPWMBounds(float PWMSignal)
-{
-  if (PWMSignal < 1000)
-  {
-    PWMSignal = 1000;
-  }
-  else if (PWMSignal > 2000)
-  {
-    PWMSignal = 2000;
-  }
-  
-  return PWMSignal;
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
 }
-  
