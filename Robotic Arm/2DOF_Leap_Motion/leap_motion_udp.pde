@@ -6,16 +6,19 @@ import hypermedia.net.*;
 final float LENGTH1 = 900.0;
 final float LENGTH2 = 1050.0;
 
-final String IP = "192.168.1.105";
+final String IP = "192.168.1.20";
+//final String IP = "192.168.1.101";
 final int PORT = 8888;
 
 float xArm;
 float yArm;
 float wrist;
+float gripper;
 
 static float pastX;
 static float pastY;
 static float pastWrist;
+static float pastGripper;
 
 float theta1;
 float theta2;
@@ -29,7 +32,7 @@ static float joint1PWM;
 static float joint2PWM;
 
 boolean firstLoopCycle = true;
-boolean oneToOne = false;
+boolean oneToOne = true;
 
 UDP udp;
 
@@ -41,6 +44,8 @@ void setup()
 {
   udp = new UDP(this, 6000);
   udp.listen(true);
+  
+  frameRate(15);
   
   size(500,500);
   leap = new Controller();
@@ -63,33 +68,39 @@ void draw()
   ************************************************/
   
   HandList hands = leap.frame().hands();
-  Hand hand = hands.get(0);
-  FingerList fingers = hand.fingers();
-  Vector hp = hand.palmPosition();
+  Hand handR = hands.get(0);
+  Hand handL = hands.get(1);
+  FingerList fingersR = handR.fingers();
+  FingerList fingersL = handL.fingers();
+  Vector hpR = handR.palmPosition();
+  Vector hpL = handL.palmPosition();
   
-  Pointable f1 = fingers.get(0);
-  Pointable f2 = fingers.get(1);
+  Pointable f1R = fingersR.get(0);
+  Pointable f2R = fingersR.get(1);
   
-  float ff1 = f1.tipPosition().getX();
-  float ff2 = f2.tipPosition().getX();
+  Pointable f1L = fingersL.get(0);
+  Pointable f2L = fingersL.get(1);
+  
+  float ff1 = f1R.tipPosition().getX();
+  float ff2 = f2R.tipPosition().getX();
   float sub = ff1 - ff2;
   
-  float pitch = hand.direction().pitch() * 100;
+  float pitchR = handR.direction().pitch() * 100;
   
-  if(hp.getY() < 150)  hp.setY(150);
-  if(hp.getY() > 445)  hp.setY(445);
-  if(hp.getZ() < -180) hp.setZ(-180);
-  if(hp.getZ() > 180)  hp.setZ(180);
+  if(hpR.getY() < 150)  hpR.setY(150);
+  if(hpR.getY() > 445)  hpR.setY(445);
+  if(hpR.getZ() < -180) hpR.setZ(-180);
+  if(hpR.getZ() > 180)  hpR.setZ(180);
   
-  float zv = map(hp.getZ(), -180, 180, 101, 1);
-  float yv = map(hp.getY(), 150, 445, 1, 101);
+  float zv = map(hpR.getZ(), -180, 180, 101, 1);
+  float yv = map(hpR.getY(), 150, 445, 1, 101);
   
-  double xv = 180 - cba(-hand.palmPosition().getX() / 1.5);
+  double xv = 180 - cba(-handR.palmPosition().getX() / 1.5);
   
-  float pv = map(pitch, -90, 100, 160, 6);
+  float pv = map(pitchR, -90, 100, 160, 6);
   float gv = map(sub, 20, 90, 145, 73);
   
-  if (fingers.count() >= 2) work = true;
+  if (fingersR.count() >= 2) work = true;
   else work = false;
   
   //if (work && zv <= 180 && zv >= 0 && yv <= 150 && yv >= 0 && xv <= 180 && xv >= 0 && pv >= 6 && gv <= 145 && gv >= 73)
@@ -110,8 +121,12 @@ if (oneToOne)
 {
   yArm = map(int(yv), 1, 101, -1950, 1950);
   xArm = map((int)zv, 1, 101, -1950, 1950);
-  wrist = map((int)pv, -30, 200, 1000, 2000);
-  
+  wrist = map((int)pv, -30, 200, 1000, 2000); 
+  //if (gv < 160)
+  //  gv = 160;
+  //else if (gv > 320)
+  //  gv = 320;
+  //gripper = map((int)gv, 160, 320, 1, 101);
   wrist = checkPWMBounds(wrist);
   
   if (firstLoopCycle)
@@ -119,6 +134,11 @@ if (oneToOne)
     pastY = yArm;
     pastX = xArm;
     pastWrist = wrist;
+    theta1 = PI/2;
+    theta2 = PI/2;
+    pastTheta1 = theta1;
+    pastTheta2 = theta2;
+    firstLoopCycle = false;
   }
   
   if ((int)yv == 1 && (int)zv == 51 && (int)pv == -167)
@@ -126,32 +146,41 @@ if (oneToOne)
     yArm = pastY;
     xArm = pastX;
     wrist = pastWrist;
-  }
-  
-  theta1 = solveTheta1(xArm, yArm, LENGTH1, LENGTH2);
-  theta2 = solveTheta2(xArm, yArm, LENGTH1, LENGTH2);
-  
-  if (firstLoopCycle)
-  {
-    pastTheta1 = theta1;
-    pastTheta2 = theta2;
-    firstLoopCycle = false;
-  }
-  
-  if (Float.isNaN(theta1))
-  {
     theta1 = pastTheta1;
-  }
-  if (Float.isNaN(theta2))
-  {
     theta2 = pastTheta2;
   }
+  
+  else
+  {
+    theta1 = solveTheta1(xArm, yArm, LENGTH1, LENGTH2);
+    theta2 = solveTheta2(xArm, yArm, LENGTH1, LENGTH2);
+  }
+  
+  if (Float.isNaN(theta1) || Float.isNaN(theta2))
+  {
+    theta1 = pastTheta1;
+    theta2 = pastTheta2;
+  }
+  //if (Float.isNaN(theta2))
+  //{
+  //  theta2 = pastTheta2;
+  //}
   
   theta1Deg = theta1 * (180/PI);
   theta2Deg = theta2 * (180/PI);
   
+  //debug th1 and th2
+  if (theta1Deg > 180 || theta1Deg < -180 || theta2Deg > 180 || theta2Deg < -180)
+  {
+    print("theta OoB: ");
+    print(theta1Deg);
+    print(" ");
+    print(theta2Deg);
+    print(" ");
+  }
+  
   joint1PWM = map(theta1Deg, -180, 180, 1000, 2000);
-  joint2PWM = map(theta2Deg, -180, 180, 1000, 2000);
+  joint2PWM = map(theta2Deg, -180, 180, 2000, 1000);
   
   joint1PWM = checkPWMBounds(joint1PWM);
   joint2PWM = checkPWMBounds(joint2PWM);
@@ -229,6 +258,7 @@ else
   text(gv, 90, 420);
   
   String message = str(int(joint1PWM)) + "/" + str(int(joint2PWM)) + "/" + str(int(wrist)) + "/";
+  
   //println(message);
   //String ip = "192.168.1.105";
   //int port = 8888;
@@ -249,13 +279,13 @@ else
   //print(" th1D\t");
   //print(theta2Deg);
   //print(" th2D\t");
-  print(joint1PWM);
-  print(" j1PWM\t");
-  print(joint2PWM);
-  print(" j2PWM\t");
-  print(wrist);
-  println(" wrPWM");
-  delay(100);
+  //print(joint1PWM);
+  //print(" j1PWM\t");
+  //print(joint2PWM);
+  //print(" j2PWM\t");
+  //print(wrist);
+  //println(" wrPWM");
+  //delay(100);
 }
 
   /***********************************************
@@ -271,7 +301,7 @@ void receive(byte[] data, String ip, int port)
   String message = new String(data);
   
   //println("receive: \""+message+"\" from "+ip+" on port "+port);
-  //println(message);
+  println(message);
 }
 
   /***********************************************
@@ -316,4 +346,3 @@ float checkPWMBounds(float PWMSignal)
   
   return PWMSignal;
 }
-  
