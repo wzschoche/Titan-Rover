@@ -3,8 +3,8 @@ import com.leapmotion.leap.*;
 import processing.net.*;
 import hypermedia.net.*;
 
-final float LENGTH1 = 900.0;
-final float LENGTH2 = 1050.0;
+final float LENGTH1 = 1000;//900.0;
+final float LENGTH2 = 800;//1050.0;
 
 final String IP = "192.168.1.20";
 //final String IP = "192.168.1.101";
@@ -31,8 +31,11 @@ static float pastTheta2;
 static float joint1PWM;
 static float joint2PWM;
 
+static float pastJoint1PWM;
+static float pastJoint2PWM;
+
 boolean firstLoopCycle = true;
-boolean oneToOne = true;
+boolean oneToOneSlow = true;
 
 UDP udp;
 
@@ -47,7 +50,7 @@ void setup()
   
   frameRate(15);
   
-  size(500,500);
+  size(650,600);
   leap = new Controller();
 }
 
@@ -75,8 +78,8 @@ void draw()
   Vector hpR = handR.palmPosition();
   Vector hpL = handL.palmPosition();
   
-  Pointable f1R = fingersR.get(0);
-  Pointable f2R = fingersR.get(1);
+  Pointable f1R = fingersR.get(2);
+  Pointable f2R = fingersR.get(3);
   
   Pointable f1L = fingersL.get(0);
   Pointable f2L = fingersL.get(1);
@@ -85,7 +88,11 @@ void draw()
   float ff2 = f2R.tipPosition().getX();
   float sub = ff1 - ff2;
   
+  float ff1L = f1L.tipPosition().getX();
+  
   float pitchR = handR.direction().pitch() * 100;
+  float rollR = handR.direction().roll() * 100;
+  rollR = map(rollR, -300, 400, 200, 0);
   
   if(hpR.getY() < 150)  hpR.setY(150);
   if(hpR.getY() > 445)  hpR.setY(445);
@@ -117,8 +124,7 @@ void draw()
       Inverse Kinematic Calculations
       
   ************************************************/ 
-if (oneToOne)
-{
+
   yArm = map(int(yv), 1, 101, -1950, 1950);
   xArm = map((int)zv, 1, 101, -1950, 1950);
   wrist = map((int)pv, -30, 200, 1000, 2000); 
@@ -138,7 +144,6 @@ if (oneToOne)
     theta2 = PI/2;
     pastTheta1 = theta1;
     pastTheta2 = theta2;
-    firstLoopCycle = false;
   }
   
   if ((int)yv == 1 && (int)zv == 51 && (int)pv == -167)
@@ -154,93 +159,55 @@ if (oneToOne)
   {
     theta1 = solveTheta1(xArm, yArm, LENGTH1, LENGTH2);
     theta2 = solveTheta2(xArm, yArm, LENGTH1, LENGTH2);
+  
+  
+    if (Float.isNaN(theta1) || Float.isNaN(theta2))
+    {
+      theta1 = pastTheta1;
+      theta2 = pastTheta2;
+    }
+  
+    theta1Deg = theta1 * (180/PI);
+    theta2Deg = theta2 * (180/PI);
+  
+    //debug th1 and th2
+    //if (theta1Deg > 180 || theta1Deg < -180 || theta2Deg > 180 || theta2Deg < -180)
+    //{
+    //  print("theta OoB: ");
+    //  print(theta1Deg);
+    //  print(" ");
+    //  print(theta2Deg);
+    //  print(" ");
+    //}
+  
+    joint1PWM = map(theta1Deg, -180, 180, 2000, 1000);
+    joint2PWM = map(theta2Deg, -180, 180, 1000, 2000);
+  
+    joint1PWM = checkPWMBounds(joint1PWM);
+    joint2PWM = checkPWMBounds(joint2PWM);
+  
+    if (firstLoopCycle)
+    {
+      pastJoint1PWM = joint1PWM;
+      pastJoint2PWM = joint2PWM;
+      firstLoopCycle = false;
+    }
+  
+    if (oneToOneSlow)
+    {
+      joint1PWM = slowIncrementPWM(joint1PWM,pastJoint1PWM);
+      joint2PWM = slowIncrementPWM(joint2PWM,pastJoint2PWM);
+    }
   }
-  
-  if (Float.isNaN(theta1) || Float.isNaN(theta2))
-  {
-    theta1 = pastTheta1;
-    theta2 = pastTheta2;
-  }
-  //if (Float.isNaN(theta2))
-  //{
-  //  theta2 = pastTheta2;
-  //}
-  
-  theta1Deg = theta1 * (180/PI);
-  theta2Deg = theta2 * (180/PI);
-  
-  //debug th1 and th2
-  if (theta1Deg > 180 || theta1Deg < -180 || theta2Deg > 180 || theta2Deg < -180)
-  {
-    print("theta OoB: ");
-    print(theta1Deg);
-    print(" ");
-    print(theta2Deg);
-    print(" ");
-  }
-  
-  joint1PWM = map(theta1Deg, -180, 180, 1000, 2000);
-  joint2PWM = map(theta2Deg, -180, 180, 2000, 1000);
-  
-  joint1PWM = checkPWMBounds(joint1PWM);
-  joint2PWM = checkPWMBounds(joint2PWM);
   
   pastY = yArm;
   pastX = xArm;
   pastWrist = wrist;
   pastTheta1 = theta1;
   pastTheta2 = theta2;
-}
+  pastJoint1PWM = joint1PWM;
+  pastJoint2PWM = joint2PWM;
 
-else
-{
-  if (firstLoopCycle)
-  {
-    joint1PWM = 1500;
-    joint2PWM = 1500;
-    wrist = 1500;
-    firstLoopCycle = false;
-  }
-  
-  if ((int)yv == 1 && (int)zv == 51 && (int)pv == -167)
-  {
-    yv = 50;
-    zv = 50;
-    pv = 50;
-  }
-  
-  if ((int)yv > 81)
-  {
-    joint1PWM += 20;
-  }
-  else if ((int)yv < 21)
-  {
-    joint1PWM -= 20;
-  }
-  
-  if ((int)zv > 81)
-  {
-    joint2PWM += 20;
-  }
-  else if ((int)zv < 21)
-  {
-    joint2PWM -= 20;
-  }
-  
-  if ((int)pv > 140)
-  {
-    wrist += 20;
-  }
-  else if ((int)pv < 10)
-  {
-    wrist -= 20;
-  }
-  
-  joint1PWM = checkPWMBounds(joint1PWM);
-  joint2PWM = checkPWMBounds(joint2PWM);
-  wrist = checkPWMBounds(wrist);
-  
-}
   
   /***********************************************
   
@@ -251,11 +218,13 @@ else
   background(100);
   fill(255);
   textSize(height / 8);
-  text(pv, 90, 100);
-  text(yv, 90, 180);
-  text(zv, 90, 260);
-  text((float)xv, 90, 340);
-  text(gv, 90, 420);
+  text("   pitch "   + (int)pv, 40, 100);
+  text("         y " + (int)yv, 40, 180);
+  text("         z " + (int)zv, 40, 260);
+  text("         x " + (int)xv, 40, 340);
+  text("fingers "    + (int)gv, 40, 420);
+  text("    roll "   + (int)rollR, 40, 500);
+  text((int)ff1L, 90, 580);
   
   String message = str(int(joint1PWM)) + "/" + str(int(joint2PWM)) + "/" + str(int(wrist)) + "/";
   
@@ -345,4 +314,18 @@ float checkPWMBounds(float PWMSignal)
   }
   
   return PWMSignal;
+}
+
+float slowIncrementPWM(float joint, float pastJoint)
+{
+  if (joint > pastJoint)
+  {
+    pastJoint += 1;
+  }
+  else if (joint < pastJoint)
+  {
+    pastJoint -= 1;
+  }
+  
+  return pastJoint;
 }
