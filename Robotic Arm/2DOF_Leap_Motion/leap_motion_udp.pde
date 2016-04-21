@@ -10,15 +10,46 @@ final String IP = "192.168.1.20";
 //final String IP = "192.168.1.101";
 final int PORT = 8888;
 
+final int ROVER_X = 550;
+final int ROVER_Y = 400;
+final int ROVER_WIDTH = 200;
+final int ROVER_LENGTH = 100;
+
+final int LEG_X = 575;
+final int LEG_Y = 500;
+final int LEG_WIDTH = 20;
+final int LEG_LENGTH = 60;
+final int LEG_SHIFT_RIGHT = 70;
+
+final int WHEEL_X = 585;
+final int WHEEL_Y = 570;
+final int WHEEL_DIAMETER = 60;
+final int WHEEL_SHIFT_RIGHT = 70;
+
+final int JOINT1_X_ORIGIN = 750;
+final int JOINT1_Y_ORIGIN = 400;
+
+int joint2X;
+int joint2Y;
+
+int endeX;
+int endeY;
+final int ENDE_DIAMETER = 10;
+
+static int pastJoint2X;
+static int pastJoint2Y;
+static int pastEndeX;
+static int pastEndeY;
+
 float xArm;
 float yArm;
 float wrist;
-float gripper;
+int gripper = 1500;
 
 static float pastX;
 static float pastY;
 static float pastWrist;
-static float pastGripper;
+static int pastGripper;
 
 float theta1;
 float theta2;
@@ -34,8 +65,12 @@ static float joint2PWM;
 static float pastJoint1PWM;
 static float pastJoint2PWM;
 
+boolean wristCW = false;
+boolean wristCCW = false;
+int wristOrientation = 0;
+
 boolean firstLoopCycle = true;
-boolean oneToOneSlow = true;
+boolean oneToOneSlow = false;
 
 UDP udp;
 
@@ -50,7 +85,12 @@ void setup()
   
   frameRate(15);
   
-  size(650,600);
+  joint2X = 850;
+  joint2Y = 350;
+  endeX = 900;
+  endeY = 250;
+  
+  size(1000,600);
   leap = new Controller();
 }
 
@@ -92,7 +132,7 @@ void draw()
   
   float pitchR = handR.direction().pitch() * 100;
   float rollR = handR.direction().roll() * 100;
-  rollR = map(rollR, -300, 400, 200, 0);
+  rollR = map(rollR, -300, 400, 100, 0);
   
   if(hpR.getY() < 150)  hpR.setY(150);
   if(hpR.getY() > 445)  hpR.setY(445);
@@ -125,15 +165,19 @@ void draw()
       
   ************************************************/ 
 
-  yArm = map(int(yv), 1, 101, -1950, 1950);
-  xArm = map((int)zv, 1, 101, -1950, 1950);
-  wrist = map((int)pv, -30, 200, 1000, 2000); 
+  yArm = map(int(yv), 1, 101, -1800, 1800);
+  xArm = map((int)zv, 1, 101, -1800, 1800);
+  wrist = map((int)pv, -30, 200, 1000, 2000);
+  endeY = (int)map(yArm, -1800, 1800, 600, 200);
+  endeX = (int)map(xArm, -1800, 1800, 500, 1000);
   //if (gv < 160)
   //  gv = 160;
   //else if (gv > 320)
   //  gv = 320;
   //gripper = map((int)gv, 160, 320, 1, 101);
   wrist = checkPWMBounds(wrist);
+  wristCW = false;
+  wristCCW = false;
   
   if (firstLoopCycle)
   {
@@ -144,15 +188,30 @@ void draw()
     theta2 = PI/2;
     pastTheta1 = theta1;
     pastTheta2 = theta2;
+    pastEndeY = endeY;
+    pastEndeX = endeX;
+    pastJoint2Y = 0;
+    pastJoint2Y = 0;
+    pastGripper = gripper;
   }
-  
-  if ((int)yv == 1 && (int)zv == 51 && (int)pv == -167)
+  if (ff1L < 0)
+  {
+    gripper = slowIncrementGripper((int)sub);
+    pastGripper = gripper;
+    rotateWrist(rollR);
+  }
+  else if ((int)yv == 1 && (int)zv == 51 && (int)pv == -167)
   {
     yArm = pastY;
     xArm = pastX;
     wrist = pastWrist;
     theta1 = pastTheta1;
     theta2 = pastTheta2;
+    endeY = pastEndeY;
+    endeX = pastEndeX;
+    joint2Y = pastJoint2Y;
+    joint2X = pastJoint2X;
+    gripper = pastGripper;
   }
   
   else
@@ -165,7 +224,12 @@ void draw()
     {
       theta1 = pastTheta1;
       theta2 = pastTheta2;
+      endeY = pastEndeY;
+      endeX = pastEndeX;
     }
+    
+    joint2Y = (int)map(sin(theta1), -1, 1, 600, 200);
+    joint2X = (int)map(cos(theta1), -1, 1, 500, 1000);
   
     theta1Deg = theta1 * (180/PI);
     theta2Deg = theta2 * (180/PI);
@@ -207,6 +271,10 @@ void draw()
   pastTheta2 = theta2;
   pastJoint1PWM = joint1PWM;
   pastJoint2PWM = joint2PWM;
+  pastEndeY = endeY;
+  pastEndeX = endeX;
+  pastJoint2X = joint2X;
+  pastJoint2Y = joint2Y;
 
   
   /***********************************************
@@ -217,16 +285,41 @@ void draw()
   
   background(100);
   fill(255);
-  textSize(height / 8);
-  text("   pitch "   + (int)pv, 40, 100);
-  text("         y " + (int)yv, 40, 180);
-  text("         z " + (int)zv, 40, 260);
-  text("         x " + (int)xv, 40, 340);
-  text("fingers "    + (int)gv, 40, 420);
-  text("    roll "   + (int)rollR, 40, 500);
-  text((int)ff1L, 90, 580);
+  textSize(height / 12);
+  text("   pitch "   + (int)pv, 40, 50);
+  text("         y " + (int)yv, 40, 130);
+  text("         z " + (int)zv, 40, 210);
+  text("         x " + (int)xv, 40, 290);
+  text("fingers "    + (int)gv, 40, 370);
+  text("    roll "   + (int)rollR, 40, 450);
+  if (wristCW)
+  {
+    text("    roll "   + "CW", 40, 530);
+  }
+  else if (wristCCW)
+  {
+    text("    roll "   + "CCW", 40, 530);
+  }
+  else
+  {
+    text("    roll "   + "OFF", 40, 530);
+  }
+  text((int)ff1L, 90, 610);
   
-  String message = str(int(joint1PWM)) + "/" + str(int(joint2PWM)) + "/" + str(int(wrist)) + "/";
+  rect(ROVER_X, ROVER_Y, ROVER_WIDTH, ROVER_LENGTH);
+  rect(LEG_X, LEG_Y, LEG_WIDTH, LEG_LENGTH);
+  rect(LEG_X + LEG_SHIFT_RIGHT, LEG_Y, LEG_WIDTH, LEG_LENGTH);
+  rect(LEG_X + LEG_SHIFT_RIGHT*2, LEG_Y, LEG_WIDTH, LEG_LENGTH);
+  ellipse(WHEEL_X, WHEEL_Y, WHEEL_DIAMETER, WHEEL_DIAMETER);
+  ellipse(WHEEL_X + WHEEL_SHIFT_RIGHT, WHEEL_Y, WHEEL_DIAMETER, WHEEL_DIAMETER);
+  ellipse(WHEEL_X + WHEEL_SHIFT_RIGHT*2, WHEEL_Y, WHEEL_DIAMETER, WHEEL_DIAMETER);
+  
+  line(JOINT1_X_ORIGIN, JOINT1_Y_ORIGIN, joint2X, joint2Y);
+  line(joint2X, joint2Y, endeX, endeY);
+  
+  ellipse(endeX, endeY, ENDE_DIAMETER, ENDE_DIAMETER);
+  
+  String message = str(int(joint1PWM)) + "/" + str(int(joint2PWM)) + "/" + str(int(wrist)) + "/" + str(wristOrientation) + "/";
   
   //println(message);
   //String ip = "192.168.1.105";
@@ -255,6 +348,7 @@ void draw()
   //print(wrist);
   //println(" wrPWM");
   //delay(100);
+  wristOrientation = 0;
 }
 
   /***********************************************
@@ -314,6 +408,41 @@ float checkPWMBounds(float PWMSignal)
   }
   
   return PWMSignal;
+}
+
+void rotateWrist (float wrst)
+{
+  if (wrst < 70 && wrst > 40)
+  {
+    wristCW = false;
+    wristCCW = true;
+    wristOrientation = 2;
+  }
+  else if (wrst > 0 && wrst <= 40)
+  {
+    wristCW = true;
+    wristCCW = false;
+    wristOrientation = 1;
+  }
+  else
+  {
+    wristCW = false;
+    wristCCW = false;
+    wristOrientation = 0;
+  }
+}
+
+int slowIncrementGripper(int fingerDistance)
+{
+  if (fingerDistance > 220)
+  {
+    return ++gripper;
+  }
+  else if (fingerDistance < 180)
+  {
+    return --gripper;
+  }
+  return gripper;
 }
 
 float slowIncrementPWM(float joint, float pastJoint)
