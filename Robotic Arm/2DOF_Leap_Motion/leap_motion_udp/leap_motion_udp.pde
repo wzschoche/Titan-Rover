@@ -76,7 +76,7 @@ int shoulderOrientation = 0;
 int lazySusanOrientation = 0;
 
 boolean firstLoopCycle = true;
-boolean oneToOneSlow = false;
+boolean oneToOneSlow = true;
 
 UDP udp;
 
@@ -250,8 +250,8 @@ void draw()
     //  print(" ");
     //}
   
-    joint1PWM = map(theta1Deg, -180, 180, 2000, 1000);
-    joint2PWM = map(theta2Deg, -180, 180, 1000, 2000);
+    joint1PWM = map(theta1Deg, -180, 180, 1000, 2000);
+    joint2PWM = map(theta2Deg, -180, 180, 2000, 1000);
   
     joint1PWM = checkPWMBounds(joint1PWM);
     joint2PWM = checkPWMBounds(joint2PWM);
