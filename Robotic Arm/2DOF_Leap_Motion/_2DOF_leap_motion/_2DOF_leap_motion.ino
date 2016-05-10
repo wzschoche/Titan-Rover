@@ -25,6 +25,8 @@ byte mac[] = {
 };
 
 IPAddress ip(192, 168, 1, 20);
+//IPAddress ip(169, 254, 85, 22);
+//IPAddress ip(192, 168, 1, 109);
 
 unsigned int localPort = 8888;
 
@@ -111,7 +113,9 @@ void loop()
   int usAJNT1 = 0;
   int usAJNT2 = 0;
   int usWRIST = 0;
-  int wristOrientation = 0;
+  int wristOrientation = -1;
+  int shoulderOrientation = -1;
+  int lazySusanOrientation = -1;
 
   
   
@@ -147,9 +151,19 @@ void loop()
           usWRIST = atoi(temp);
           strcpy(temp,"");
         }
-        else
+        else if (wristOrientation == -1)
         {
           wristOrientation = atoi(temp);
+          strcpy(temp,"");
+        }
+        else if (shoulderOrientation == -1)
+        {
+          shoulderOrientation = atoi(temp);
+          strcpy(temp,"");
+        }
+        else
+        {
+          lazySusanOrientation = atoi(temp);
           break;
         }
         loopCount = i + 1;
@@ -165,7 +179,11 @@ void loop()
     Serial.println(packetBuffer);
 
     Wire.beginTransmission(8);
-    Wire.write(wristOrientation);
+    Wire.write(shoulderOrientation);
+    Wire.endTransmission();
+
+    Wire.beginTransmission(9);
+    Wire.write(lazySusanOrientation);
     Wire.endTransmission();
 
 

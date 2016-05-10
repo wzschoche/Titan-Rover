@@ -1,4 +1,5 @@
 
+
 import com.leapmotion.leap.*;
 import processing.net.*;
 import hypermedia.net.*;
@@ -6,6 +7,8 @@ import hypermedia.net.*;
 final float LENGTH1 = 1000;//900.0;
 final float LENGTH2 = 800;//1050.0;
 
+//final String IP = "192.168.1.109";
+//final String IP = "169.254.85.22";
 final String IP = "192.168.1.20";
 //final String IP = "192.168.1.101";
 final int PORT = 8888;
@@ -68,6 +71,9 @@ static float pastJoint2PWM;
 boolean wristCW = false;
 boolean wristCCW = false;
 int wristOrientation = 0;
+
+int shoulderOrientation = 0;
+int lazySusanOrientation = 0;
 
 boolean firstLoopCycle = true;
 boolean oneToOneSlow = false;
@@ -319,7 +325,7 @@ void draw()
   
   ellipse(endeX, endeY, ENDE_DIAMETER, ENDE_DIAMETER);
   
-  String message = str(int(joint1PWM)) + "/" + str(int(joint2PWM)) + "/" + str(int(wrist)) + "/" + str(wristOrientation) + "/";
+  String message = str(int(joint1PWM)) + "/" + str(int(joint2PWM)) + "/" + str(int(wrist)) + "/" + str(wristOrientation) + "/" + str(shoulderOrientation) + "/" + str(lazySusanOrientation) + "/";
   
   //println(message);
   //String ip = "192.168.1.105";
@@ -458,3 +464,51 @@ float slowIncrementPWM(float joint, float pastJoint)
   
   return pastJoint;
 }
+
+void keyPressed()
+{
+  if (key == 'A')
+  {
+    //rotate clockwise
+    lazySusanOrientation = 1;
+    //println("a");
+  }
+  else if (key == 'D')
+  {
+    //rotate counter-clockwise
+    lazySusanOrientation = 2;
+    //println("d");
+  }
+  else
+  {
+    //no rotation
+    lazySusanOrientation = 0;
+    //println("lso 0");
+  }
+  
+  if (key == 'W')
+  {
+    //rotate up
+    shoulderOrientation = 2;
+    //println("w");
+  }
+  else if (key == 'S')
+  {
+    //rotate down
+    shoulderOrientation = 1;
+    //println("s");
+  }
+  else
+  {
+    //no rotation
+    shoulderOrientation = 0;
+    //println("so 0");
+  }
+}
+
+void keyReleased()
+{
+  shoulderOrientation = 0;
+  lazySusanOrientation = 0;
+}
+    
