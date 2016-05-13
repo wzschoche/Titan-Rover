@@ -44,12 +44,14 @@ EthernetUDP Udp;
 #define AJNT2_OUT_PIN 6
 //#define ENDE_OUT_PIN 11
 #define WRIST_OUT_PIN 9
+#define GRIPPER_OUT_PIN 4
 
 
 Servo armJoint1;
 Servo armJoint2;
 //Servo endeJoint;
 Servo wristJoint;
+Servo gripperJoint;
 
 
 void setup()
@@ -65,11 +67,13 @@ void setup()
   armJoint2.attach(AJNT2_OUT_PIN);
   //endeJoint.attach(ENDE_OUT_PIN);
   wristJoint.attach(WRIST_OUT_PIN);
+  gripperJoint.attach(GRIPPER_OUT_PIN);
 
   armJoint1.writeMicroseconds(CENTER_SIGNAL);
   armJoint2.writeMicroseconds(CENTER_SIGNAL);
   //endeJoint.writeMicroseconds(ENDE_SIGNAL);
   wristJoint.writeMicroseconds(CENTER_SIGNAL);
+  gripperJoint.attach(CENTER_SIGNAL);
 
   Ethernet.begin(mac, ip);
   Udp.begin(localPort);
@@ -113,6 +117,7 @@ void loop()
   int usAJNT1 = 0;
   int usAJNT2 = 0;
   int usWRIST = 0;
+  int usGRIPPER = 0;
   int wristOrientation = -1;
   int shoulderOrientation = -1;
   int lazySusanOrientation = -1;
@@ -161,9 +166,14 @@ void loop()
           shoulderOrientation = atoi(temp);
           strcpy(temp,"");
         }
-        else
+        else if (lazySusanOrientation == -1)
         {
           lazySusanOrientation = atoi(temp);
+          strcpy(temp,"");
+        }
+        else
+        {
+          usGRIPPER = atoi(temp);
           break;
         }
         loopCount = i + 1;
@@ -193,6 +203,7 @@ void loop()
       setSpeedJoint2(usAJNT2);
       //setSpeedEndE(1500);
       setSpeedWrist(usWRIST);
+      setSpeedGripper(usGRIPPER);
     
 
 //    String message = String(usAJNT1) + " PWM\t" + String(usAJNT2) + " PWM\t" + String(usWRIST) + " PWM";
@@ -234,6 +245,11 @@ void setSpeedJoint2(uint16_t val)
 void setSpeedWrist(uint16_t val)
 {
   wristJoint.writeMicroseconds(val);
+}
+
+void setSpeedGripper(uint16_t val)
+{
+  gripperJoint.writeMicroseconds(val);
 }
 
 

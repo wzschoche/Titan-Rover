@@ -46,13 +46,13 @@ static int pastEndeY;
 
 float xArm;
 float yArm;
-float wrist;
-int gripper = 1500;
+float wrist = 1500;
+float gripper = 1500;
 
 static float pastX;
 static float pastY;
 static float pastWrist;
-static int pastGripper;
+static float pastGripper;
 
 float theta1;
 float theta2;
@@ -77,6 +77,7 @@ int lazySusanOrientation = 0;
 
 boolean firstLoopCycle = true;
 boolean oneToOneSlow = true;
+int oneToOneSlowIncrementFactor = 3;
 
 UDP udp;
 
@@ -173,7 +174,7 @@ void draw()
 
   yArm = map(int(yv), 1, 101, -1800, 1800);
   xArm = map((int)zv, 1, 101, -1800, 1800);
-  wrist = map((int)pv, -30, 200, 1000, 2000);
+  //wrist = map((int)pv, -30, 200, 1000, 2000);
   endeY = (int)map(yArm, -1800, 1800, 600, 200);
   endeX = (int)map(xArm, -1800, 1800, 500, 1000);
   //if (gv < 160)
@@ -181,7 +182,7 @@ void draw()
   //else if (gv > 320)
   //  gv = 320;
   //gripper = map((int)gv, 160, 320, 1, 101);
-  wrist = checkPWMBounds(wrist);
+  //wrist = checkPWMBounds(wrist);
   wristCW = false;
   wristCCW = false;
   
@@ -202,9 +203,15 @@ void draw()
   }
   if (ff1L < 0)
   {
-    gripper = slowIncrementGripper((int)sub);
+    gv = map(gv, 180, 220, 1000, 2000);
+    gv = checkPWMBounds(gv);
+    gripper = slowIncrementPWM(gv, pastGripper);
     pastGripper = gripper;
     rotateWrist(rollR);
+    //rollR = map(rollR, 60, 90, 1000, 2000);
+    //rollR = checkPWMBounds(rollR);
+    //wrist = slowIncrementPWM(rollR, pastWrist);
+    pastWrist = wrist;
   }
   else if ((int)yv == 1 && (int)zv == 51 && (int)pv == -167)
   {
@@ -325,7 +332,7 @@ void draw()
   
   ellipse(endeX, endeY, ENDE_DIAMETER, ENDE_DIAMETER);
   
-  String message = str(int(joint1PWM)) + "/" + str(int(joint2PWM)) + "/" + str(int(wrist)) + "/" + str(wristOrientation) + "/" + str(shoulderOrientation) + "/" + str(lazySusanOrientation) + "/";
+  String message = str(int(joint1PWM)) + "/" + str(int(joint2PWM)) + "/" + str(int(wrist)) + "/" + str(wristOrientation) + "/" + str(shoulderOrientation) + "/" + str(lazySusanOrientation) + "/" + str(int(gripper)) + "/";
   
   //println(message);
   //String ip = "192.168.1.105";
@@ -423,12 +430,14 @@ void rotateWrist (float wrst)
     wristCW = false;
     wristCCW = true;
     wristOrientation = 2;
+    --wrist;
   }
   else if (wrst > 0 && wrst <= 40)
   {
     wristCW = true;
     wristCCW = false;
     wristOrientation = 1;
+    ++wrist;
   }
   else
   {
@@ -438,29 +447,35 @@ void rotateWrist (float wrst)
   }
 }
 
-int slowIncrementGripper(int fingerDistance)
-{
-  if (fingerDistance > 220)
-  {
-    return ++gripper;
-  }
-  else if (fingerDistance < 180)
-  {
-    return --gripper;
-  }
-  return gripper;
-}
+//int slowIncrementGripper(int fingerDistance)
+//{
+//  if (fingerDistance > 220)
+//  {
+//    return ++gripper;
+//  }
+//  else if (fingerDistance < 180)
+//  {
+//    return --gripper;
+//  }
+//  return gripper;
+//}
 
 float slowIncrementPWM(float joint, float pastJoint)
 {
   if (joint > pastJoint)
   {
-    pastJoint += 1;
+    pastJoint += oneToOneSlowIncrementFactor;
   }
   else if (joint < pastJoint)
   {
-    pastJoint -= 1;
+    pastJoint -= oneToOneSlowIncrementFactor;
   }
+  
+//  if (pastJoint > joint || pastJoint < joint)
+//  {
+//    pastJoint = joint;
+//  }
+
   
   return pastJoint;
 }
