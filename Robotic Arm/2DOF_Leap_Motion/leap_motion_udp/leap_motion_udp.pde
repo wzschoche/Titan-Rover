@@ -371,6 +371,7 @@ void draw()
   
   text("wristOnline      " + str(wristOnline), 400, 50);
   text("gripperOnline  " + str(gripperOnline), 400, 130);
+  text("j1 j2 pause      " + str(wrist_gripper_mode), 400, 210);
   
   rect(ROVER_X, ROVER_Y, ROVER_WIDTH, ROVER_LENGTH);
   rect(LEG_X, LEG_Y, LEG_WIDTH, LEG_LENGTH);
@@ -598,7 +599,7 @@ void keyPressed()
   
   if (key == 'g')
   {
-    wrist_gripper_mode = true;
+    wrist_gripper_mode = !wrist_gripper_mode;//true;
   }
   else if (key == 'h')
   {
@@ -612,10 +613,10 @@ void keyPressed()
 
 void keyReleased()
 {
-  if (key == 'g')
-  {
-   wrist_gripper_mode = false;
-  }
+  //if (key == 'g')
+  //{
+  // wrist_gripper_mode = false;
+  //}
   if (key == 'h')
   {
    wristOnline = false;
