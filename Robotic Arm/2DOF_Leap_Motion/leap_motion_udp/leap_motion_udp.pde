@@ -4,8 +4,8 @@ import com.leapmotion.leap.*;
 import processing.net.*;
 import hypermedia.net.*;
 
-final float LENGTH1 = 1000;//900.0;
-final float LENGTH2 = 800;//1050.0;
+final float LENGTH1 = 1000;//900.0;//1025;
+final float LENGTH2 = 800;//1050.0;//950;
 
 //final String IP = "192.168.1.109";
 //final String IP = "169.254.85.22";
@@ -31,6 +31,9 @@ final int WHEEL_SHIFT_RIGHT = 70;
 
 final int JOINT1_X_ORIGIN = 750;
 final int JOINT1_Y_ORIGIN = 400;
+
+final int JOINT1_RESET = 1700;
+final int JOINT2_RESET = 1700;
 
 int joint2X;
 int joint2Y;
@@ -62,8 +65,8 @@ float theta2Deg;
 static float pastTheta1;
 static float pastTheta2;
 
-static float joint1PWM;
-static float joint2PWM;
+float joint1PWM = JOINT1_RESET;
+float joint2PWM = JOINT2_RESET;
 
 static float pastJoint1PWM;
 static float pastJoint2PWM;
@@ -79,6 +82,17 @@ boolean firstLoopCycle = true;
 boolean oneToOneSlow = true;
 int oneToOneSlowIncrementFactor = 3;
 
+boolean  joint1Increment = false;
+boolean  joint1Decrement = false;
+boolean  joint2Increment = false;
+boolean  joint2Decrement = false;
+
+boolean  wrist_gripper_mode = false;
+boolean  wristOnline = false;
+boolean  gripperOnline = false;
+
+boolean  reset = false;
+
 UDP udp;
 
 Client arm;
@@ -90,7 +104,7 @@ void setup()
   udp = new UDP(this, 6000);
   udp.listen(true);
   
-  frameRate(15);
+  frameRate(10);
   
   joint2X = 850;
   joint2Y = 350;
@@ -140,7 +154,10 @@ void draw()
   float pitchR = handR.direction().pitch() * 100;
   float rollR = handR.direction().roll() * 100;
   rollR = map(rollR, -300, 400, 100, 0);
-  
+  //if (rollR < 0) rollR *= -1;
+  //rollR = map(rollR, -300, 400, 100, 0);
+
+
   if(hpR.getY() < 150)  hpR.setY(150);
   if(hpR.getY() > 445)  hpR.setY(445);
   if(hpR.getZ() < -180) hpR.setZ(-180);
@@ -201,17 +218,32 @@ void draw()
     pastJoint2Y = 0;
     pastGripper = gripper;
   }
-  if (ff1L < 0)
+  if (reset)
   {
-    gv = map(gv, 180, 220, 1000, 2000);
-    gv = checkPWMBounds(gv);
-    gripper = slowIncrementPWM(gv, pastGripper);
-    pastGripper = gripper;
+    joint1PWM = JOINT1_RESET;
+    joint2PWM = JOINT2_RESET;
+  }
+  else if (wrist_gripper_mode)//(ff1L < 0)
+  {
+    if (gripperOnline)
+    {
+      gv = map(gv, 180, 220, 2000, 1000);
+      gv = checkPWMBounds(gv);
+      gripper = slowIncrementPWM(gv, pastGripper);
+    }
+    if (wristOnline)
+    {
     rotateWrist(rollR);
+    //wrist = slowIncrementPWM(rollR, pastWrist);
+    }
+   
     //rollR = map(rollR, 60, 90, 1000, 2000);
     //rollR = checkPWMBounds(rollR);
     //wrist = slowIncrementPWM(rollR, pastWrist);
+    pastGripper = gripper;
     pastWrist = wrist;
+    //println("wrist " + str(wrist));
+    //println("gripper " + str(gripper));
   }
   else if ((int)yv == 1 && (int)zv == 51 && (int)pv == -167)
   {
@@ -277,6 +309,24 @@ void draw()
     }
   }
   
+  if (joint1Increment)
+  {
+    joint1PWM += 1;
+  }
+  else if (joint1Decrement)
+  {
+    joint1PWM += -1;
+  }
+  
+  if (joint2Increment)
+  {
+    joint2PWM += 1;
+  }
+  else if (joint2Decrement)
+  {
+    joint2PWM += -1;
+  }
+  
   pastY = yArm;
   pastX = xArm;
   pastWrist = wrist;
@@ -318,6 +368,9 @@ void draw()
     text("    roll "   + "OFF", 40, 530);
   }
   text((int)ff1L, 90, 610);
+  
+  text("wristOnline      " + str(wristOnline), 400, 50);
+  text("gripperOnline  " + str(gripperOnline), 400, 130);
   
   rect(ROVER_X, ROVER_Y, ROVER_WIDTH, ROVER_LENGTH);
   rect(LEG_X, LEG_Y, LEG_WIDTH, LEG_LENGTH);
@@ -430,14 +483,14 @@ void rotateWrist (float wrst)
     wristCW = false;
     wristCCW = true;
     wristOrientation = 2;
-    --wrist;
+    wrist -= oneToOneSlowIncrementFactor;
   }
   else if (wrst > 0 && wrst <= 40)
   {
     wristCW = true;
     wristCCW = false;
     wristOrientation = 1;
-    ++wrist;
+    wrist += oneToOneSlowIncrementFactor;
   }
   else
   {
@@ -482,6 +535,29 @@ float slowIncrementPWM(float joint, float pastJoint)
 
 void keyPressed()
 {
+  if (key == 'r')
+  {
+    reset = true;
+  }
+  
+  if (key == 'a')
+  {
+    joint1Increment = true;//joint1PWM += 1;
+  }
+  else if (key == 'z')
+  {
+    joint1Decrement = true;//joint1PWM += -1;
+  }
+  
+  if (key == 's')
+  {
+    joint2Increment = true;//joint2PWM += 1;
+  }
+  else if (key == 'x')
+  {
+    joint2Decrement = true;//joint2PWM += -1;
+  }
+  
   if (key == 'A')
   {
     //rotate clockwise
@@ -519,10 +595,55 @@ void keyPressed()
     shoulderOrientation = 0;
     //println("so 0");
   }
+  
+  if (key == 'g')
+  {
+    wrist_gripper_mode = true;
+  }
+  else if (key == 'h')
+  {
+    wristOnline = true;
+  }
+  else if (key == 'j')
+  {
+    gripperOnline = true;
+  }
 }
 
 void keyReleased()
 {
+  if (key == 'g')
+  {
+   wrist_gripper_mode = false;
+  }
+  if (key == 'h')
+  {
+   wristOnline = false;
+  }
+  if (key == 'j')
+  {
+   gripperOnline = false;
+  }
+  
+    if (key == 'a')
+  {
+    joint1Increment = false;//joint1PWM += 1;
+  }
+  else if (key == 'z')
+  {
+    joint1Decrement = false;//joint1PWM += -1;
+  }
+  
+  if (key == 's')
+  {
+    joint2Increment = false;//joint2PWM += 1;
+  }
+  else if (key == 'x')
+  {
+    joint2Decrement = false;//joint2PWM += -1;
+  }
+  
+  reset = false;
   shoulderOrientation = 0;
   lazySusanOrientation = 0;
 }

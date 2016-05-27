@@ -44,7 +44,7 @@ EthernetUDP Udp;
 #define AJNT2_OUT_PIN 6
 //#define ENDE_OUT_PIN 11
 #define WRIST_OUT_PIN 9
-#define GRIPPER_OUT_PIN 4
+#define GRIPPER_OUT_PIN 11
 
 
 Servo armJoint1;
@@ -73,7 +73,7 @@ void setup()
   armJoint2.writeMicroseconds(CENTER_SIGNAL);
   //endeJoint.writeMicroseconds(ENDE_SIGNAL);
   wristJoint.writeMicroseconds(CENTER_SIGNAL);
-  gripperJoint.attach(CENTER_SIGNAL);
+  gripperJoint.writeMicroseconds(CENTER_SIGNAL);
 
   Ethernet.begin(mac, ip);
   Udp.begin(localPort);
@@ -186,6 +186,8 @@ void loop()
     Serial.print(" joint2\t");
     Serial.print(usWRIST);
     Serial.print(" wrist\t");
+    Serial.print(usGRIPPER);
+    Serial.print(" gripper\t");
     Serial.println(packetBuffer);
 
     Wire.beginTransmission(8);
